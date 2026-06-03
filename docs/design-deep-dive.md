@@ -77,6 +77,67 @@ freshness-bot <freshness@llm-wiki.internal>           # 鮮度チェック
 [freshness] flag entities/teams/bar as stale (last updated 2025-12-01)
 ```
 
+### 1.4 CI 実装戦略（Hermes 連携）
+
+エージェントの実体は Hermes の `chat` コマンドでスキルを呼び出す形が最もシンプルで実用的。
+3 段階の実装レベルを状況に応じて使い分ける。
+
+#### レベル 1: 軽量（ワンライナー）
+
+```yaml
+# .github/workflows/curator.yml
+curate:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - run: |
+        hermes chat \
+          --profile llm-wiki \
+          --skill llm-wiki-curator \
+          -q "branch 上の status: raw の全ファイルを curated に変換し、commit して push せよ"
+```
+
+単発の変換、シンプルな curator に適する。
+
+#### レベル 2: 標準（スキル + プロファイル分離）
+
+| スキル | プロファイル | 役割 |
+|--------|------------|------|
+| `llm-wiki-connector-sp` | `llm-wiki-connector` | SharePoint の新規/更新ドキュメントを取得、branch 作成、status: raw で commit |
+| `llm-wiki-curator` | `llm-wiki-curator` | status: raw → curated 変換、構造化、wikilink 付与 |
+| `llm-wiki-freshness` | `llm-wiki-freshness` | 鮮度評価、更新 branch 作成 |
+| `llm-wiki-lint` | `llm-wiki-lint` | schema 検証、重複検出、wikilink 整合性 |
+
+プロファイルで API キー・モデル・ツールセットを分離することで：
+- curator は高性能モデル（DeepSeek V4 Pro）、connector は軽量モデル（Flash）
+- スキルごとに必要なツールだけを有効化しトークン消費を抑制
+- エージェント間の権限分離（Git の committer と対応）
+
+#### レベル 3: 本格（Hermes SDK）
+
+複数ファイルのバッチ処理やステートフルなワークフローが必要になった場合。
+`hermes_tools` を CI スクリプトから直接 import し、細粒度の制御を行う。
+
+```python
+# .github/scripts/curate.py
+from hermes_tools import terminal, read_file, write_file, search_files
+
+files = search_files(pattern="status: raw", target="content", path=".")
+for f in files:
+    content = read_file(f["path"])["content"]
+    # LLM 処理...
+    write_file(f["path"], curated_content)
+terminal("git add -A && git commit -m '[curator] transform raw → curated' && git push")
+```
+
+#### 選択基準
+
+```
+始めはレベル 1 で十分。
+スキルが複雑化してきたらレベル 2 に分割。
+パフォーマンスや状態管理が必要になったらレベル 3 に移行。
+```
+
 ---
 
 ## 2. Markdown メタデータ設計
