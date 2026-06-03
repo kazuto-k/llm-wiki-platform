@@ -6,14 +6,14 @@
 
 ### 1.1 エージェント一覧と責務
 
-| エージェント | トリガー | 書き込み先 | リスク | 承認モデル |
+| エージェント | トリガー | 書き込み先 | リスク | 公開モデル |
 |------------|----------|-----------|--------|-----------|
-| **connector-confluence** | 手動（初回インポート） | raw/confluence/ | 低 | 直接 push |
-| **connector-sharepoint** | 定期（15〜60分） | raw/sharepoint/ | 低 | 直接 push |
-| **connector-teams** | 定期 | raw/teams/ | 中（会話ログの機密性） | 直接 push、raw/ は admin only |
-| **curator** | raw/ 更新検出時 | entities/, concepts/ | **高**（構造化品質・誤分類） | PR レビュー |
-| **lint-checker** | PR 時 + 定期 | なし（レポートのみ） | 低 | CI 自動実行 |
-| **freshness-checker** | 定期（日次） | 既存ページ更新 or PR | 中（誤判定） | PR レビュー |
+| **connector-confluence** | 手動（初回インポート） | raw/confluence/ | 低 | raw/ は admin only。表示されない |
+| **connector-sharepoint** | 定期（15〜60分） | raw/sharepoint/ | 低 | raw/ は admin only |
+| **connector-teams** | 定期 | raw/teams/ | 中（会話ログの機密性） | raw/ は admin only |
+| **curator** | raw/ 更新検出時 | entities/, concepts/ | **高**（構造化品質・誤分類） | auto-merge で即公開。元の著者に事後通知 |
+| **lint-checker** | PR 時 + 定期 | なし（レポートのみ） | 低 | curator の PR をブロックするゲート |
+| **freshness-checker** | 定期（日次） | 既存ページ更新 or PR | 中（誤判定） | auto-merge + 最終編集者に事後通知 |
 
 ### 1.2 パイプライン構成
 
@@ -26,19 +26,23 @@
          ▼
    curator （raw/ → entities/concepts 再編成）
          │
-         ▼
-   lint-checker （CI。失敗 = ブロック）
+         ├── lint-checker（CI。失敗 = ブロック）
          │
          ▼
-   freshness-checker （鮮度評価 → 更新PR）
+   auto-merge（lint 通過 = 即公開）
+         │
+         ├── Wiki.js 同期（5分以内に表示反映）
+         │
+         └── 著者通知（「あなたの文書が AI に整理されました」）
          │
          ▼
-   Wiki.js 同期（5分以内に表示反映）
+   freshness-checker（鮮度評価 → 更新 or 著者通知）
 ```
 
-- **逐次実行**: Git が調整機構。並列書き込みは避ける
-- **コネクタは直接 push**: リスク低、raw/ は Wiki.js 上で admin-only
-- **編纂系は PR ベース**: curator / freshness-checker は branch → PR → CI → merge
+- **事前レビューはしない**: 全件事前承認は回らない。Confluence が死んだのと同じ理由。
+- **ゲートは CI（lint）のみ**: 機密スキャン、重複検出、wikilink 整合性。機械的に判定できるものだけ。
+- **事後通知が主**: 元の文書の著者に「AI がこう整理した。問題あれば修正を」と通知。
+- **著者が修正したらそれが正**: curator の出力より人間の修正が優先。
 
 ### 1.3 Git コミッター設計
 
@@ -73,6 +77,7 @@ entity_type: project  # person | team | project | technology | ...
 status: curated       # raw | draft | curated | stale
 source: raw/confluence/space-engineering/page-42
 source_url: https://confluence.internal/display/ENG/Arch
+source_author: alice@company.com    # 元の文書の著者。通知先
 last_curated: 2026-06-03T14:00:00Z
 curated_by: curator-bot
 confidence: 0.85      # 編纂の確信度（0-1）
@@ -86,6 +91,73 @@ related: [[entities/teams/platform]], [[concepts/k8s-best-practices]]
 - **鮮度判断**: last_curated と source の更新日を比較
 - **信頼度表示**: confidence が低いものは人間レビューが必要
 - **自動タグ**: エージェントが生成、人間が修正可能
+- **著者追跡**: source_author を元の文書から引き継ぎ、通知先として使用
+
+### 2.1 著者フィードバックモデル（中核設計）
+
+**原則: 事前レビューではなく、著者への事後通知と修正機会の提供。**
+
+#### なぜ事前レビューをしないか
+
+全件事前承認は回らない。**Confluence が死んだのと同じ理由**——人間はドキュメントをレビューしない。curator が日次で数十の PR を生成したら、レビューキューが溜まり、誰も見なくなり、結局 auto-merge 運用になるのが目に見えている。
+
+#### 代わりに何をするか
+
+```
+curator がページ生成
+      │
+      ▼
+lint-checker 通過（CI ゲート）
+      │
+      ▼
+auto-merge → Wiki.js に即公開
+      │
+      ▼
+source_author に通知:
+  「あなたが書いた [元文書] を AI が整理し、
+   以下のページを生成しました:
+   - entities/projects/foo
+   - concepts/architecture/bar
+   問題があれば直接編集してください。
+   編集内容は curator の次回更新より優先されます。」
+      │
+      ▼
+著者が修正 → Git に commit → それが正
+著者が無視   → curator の出力がそのまま残る（confidence は低めに表示）
+著者が「確認済み」→ status: verified になる
+```
+
+#### 通知の設計
+
+| 項目 | 内容 |
+|------|------|
+| **通知先** | source_author（元文書の著者） |
+| **通知手段** | Teams / メール（コネクタが著者情報を取得できる場合） |
+| **通知タイミング** | curator の処理完了直後 |
+| **通知内容** | 元文書のタイトル、生成されたページへのリンク、修正方法の案内 |
+| **リマインダー** | 1 週間後に未確認のものだけ再通知 |
+| **エスカレーション** | 1 ヶ月未確認 → ページに「未確認」バッジ表示 |
+
+#### 著者不在の問題
+
+著者が退職・異動している場合、source_author が無効になる。その場合：
+- 部署のグループ宛に通知（SharePoint の所属グループ情報から）
+- それもできない場合は「著者不在」フラグを立て、admin が確認
+
+#### なぜ「書いた本人」なのか
+
+- **ownership**: 自分の書いた文書がどう整理されたか、書いた本人が一番気にする
+- **ドメイン知識**: 内容の正確さを判断できる唯一の存在
+- **動機**: 自分の文書が「変な風に整理される」のは心理的に嫌なはずで、修正する動機が働く
+- **スケーラビリティ**: 中央の「レビューア」を置くより、著者ごとに分散する方が回る
+
+#### curator と人間の競合解決
+
+1. curator がページを生成 → status: curated
+2. 人間が編集 → curator はそれ以降、そのページの該当セクションを上書きしない
+3. 人間が編集したことは Git diff で検出可能（curator-bot 以外の committer）
+4. 人間の編集があったページは curator の更新対象から外れる（または「提案」モードに切り替わる）
+5. 人間が「再編成してほしい」と明示的に要求した場合のみ curator が再介入
 
 ---
 
@@ -269,3 +341,7 @@ freshness: 200 ページ × 2K tokens × $0.0028/M = $1.12
 4. **検索**: Wiki.js の組み込み検索（PostgreSQL FTS / Elasticsearch）は ACL を尊重する。だがエージェントが横断的に検索する場合、ACL をバイパスして Git の内容を直接 grep することになる。この「検索の二重構造」をどう説明するか。
 
 5. **マルチテナント**: 今回の対象は 1 組織だが、将来複数組織が使う場合のテナント分離。Git リポジトリを組織ごとに分割？ Wiki.js インスタンスを組織ごとに立てる？
+
+6. **著者通知の実現手段**: source_author をどこから取得するか。SharePoint の場合は Graph API の `createdBy` で取れる。Confluence の場合はエクスポート XML に author 情報が含まれるか要確認。Teams の場合は投稿者。これらを connector が確実に取得し frontmatter に書き込めるかは要検証。
+
+7. **確認済みステータスの管理**: 著者が「確認済み」にした場合、その状態をどこに保存するか。Markdown frontmatter に `status: verified` と `verified_by: alice@company.com`、`verified_at: 日時` を書く。Git の commit として残るので監査可能。著者が Wiki.js UI で編集した場合、どうやってその編集が「確認」を意味するのかを判定する必要がある（単なる typo 修正かもしれない）。
