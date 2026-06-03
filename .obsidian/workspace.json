@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/design-deep-dive.md",
+                "file": "README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "design-deep-dive"
+              "title": "README"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs/design-deep-dive.md",
+                "file": "README.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "design-deep-diveへのバックリンク"
+              "title": "READMEへのバックリンク"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs/design-deep-dive.md",
+                "file": "README.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "design-deep-diveからのアウトゴーイングリンク"
+              "title": "READMEからのアウトゴーイングリンク"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/design-deep-dive.md",
+                "file": "README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "design-deep-diveのアウトライン"
+              "title": "READMEのアウトライン"
             }
           }
         ]
@@ -185,7 +185,13 @@
   },
   "active": "9448760072d1160d",
   "lastOpenFiles": [
+    "pipeline/trigger-sync.py",
+    "docs/design-deep-dive.md",
     "test/wikijs-data/wiki.sqlite-journal",
+    "docs/design-notes/2026-06-03-llm-wiki-pipeline-prototype.md",
+    "docs/design-notes/2026-06-03-wikijs-page-rules.md",
+    "docs/design-notes/2026-06-03-wikijs-git-sync-roundtrip.md",
+    "docs/design-notes",
     "test/wiki-remote.git/objects/35/5d62306b17fd5036516f8cd5b7594103aa9fef",
     "test/wiki-remote.git/objects/35",
     "test/wiki-remote.git/objects/tmp_objdir-incoming-SlY2xR/35/5d62306b17fd5036516f8cd5b7594103aa9fef",
@@ -194,8 +200,6 @@
     "test/wiki-remote.git/objects/tmp_objdir-incoming-SlY2xR",
     "test/wiki-remote.git/objects/2d/2dac956f4f5f9e205bb7d8e67816841366f876",
     "test/wiki-remote.git/objects/74/ed253fe5ad1a91e1cf46f3e78a93a3580d1bab",
-    "test/wiki-remote.git/objects/74",
-    "test/wiki-remote.git/objects/14/d31d0be83b206c3a2fa6235999c4ddf39fd8b9",
     "test/wikijs-data/repo/entities/projects/payment-service.md",
     "pipeline/README.md",
     "test/wikijs-data/repo/entities/projects/api-migration.md",
@@ -204,7 +208,6 @@
     "test/wikijs-data/repo/concepts/git-sync.md",
     "docs/architecture.md",
     "README.md",
-    "docs/design-deep-dive.md",
     "test/README.md",
     "test/wikijs-data/repo/home.md",
     "test/wikijs-data/repo/entities/projects/test-project.md",
