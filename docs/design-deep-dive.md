@@ -6,13 +6,13 @@
 
 ### 1.1 エージェント一覧と責務
 
-| エージェント | トリガー | 操作 | リスク | 公開モデル |
-|------------|----------|------|--------|-----------|
-| **connector-confluence** | 手動（初回インポート） | エクスポート XML を Markdown に変換し、適切なパスに `status: raw` で commit | 低 | Wiki.js ACL が即時適用 |
-| **connector-sharepoint** | 定期（15〜60分） | SharePoint の新規/更新ドキュメントを取得し、branch 作成 → `status: raw` で commit | 低 | 同上 |
-| **curator** | connector の branch への push でトリガー | 同一ファイルの `status: raw` → `status: curated` に変換。構造化・wikilink 付与 | **高** | auto-merge 即公開 + 著者通知 |
-| **lint-checker** | curator の push でトリガー | schema 違反・重複・wikilink 切れをチェック。失敗 = merge ブロック | 低 | CI ゲート |
-| **freshness-checker** | 定期（日次） | `status: curated` のファイルの鮮度を評価。必要なら更新 branch 作成 | 中 | auto-merge + 著者通知 |
+| エージェント | トリガー | 操作 | リスク | 実装方式 |
+|------------|----------|------|--------|----------|
+| **connector-confluence** | 手動（初回インポート） | エクスポート XML を Markdown に変換し、適切なパスに `status: raw` で commit | 低 | Hermes skill（判断が必要なため） |
+| **connector-sharepoint** | 定期（15〜60分） | SharePoint の新規/更新ドキュメントを取得し、branch 作成 → `status: raw` で commit | 低 | Hermes skill |
+| **curator** | connector の branch への push でトリガー | 同一ファイルの `status: raw` → `status: curated` に変換。構造化・wikilink 付与 | **高** | Hermes skill（LLM 必須） |
+| **lint-checker** | curator の push でトリガー | schema 違反・重複・wikilink 切れをチェック。失敗 = merge ブロック | 低 | **Python スクリプト（LLM 不要）** |
+| **freshness-checker** | 定期（日次） | `status: curated` のファイルの鮮度を評価。必要なら更新 branch 作成 | 中 | Hermes skill
 
 ### 1.2 パイプライン構成（CI 駆動）
 
