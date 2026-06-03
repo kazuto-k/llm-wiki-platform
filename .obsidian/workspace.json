@@ -185,7 +185,29 @@
   },
   "active": "9448760072d1160d",
   "lastOpenFiles": [
+    "test/wikijs-data/wiki.sqlite-journal",
+    "test/wiki-remote.git/objects/35/5d62306b17fd5036516f8cd5b7594103aa9fef",
+    "test/wiki-remote.git/objects/35",
+    "test/wiki-remote.git/objects/tmp_objdir-incoming-SlY2xR/35/5d62306b17fd5036516f8cd5b7594103aa9fef",
+    "test/wiki-remote.git/objects/tmp_objdir-incoming-SlY2xR/35",
+    "test/wiki-remote.git/objects/tmp_objdir-incoming-SlY2xR/pack",
+    "test/wiki-remote.git/objects/tmp_objdir-incoming-SlY2xR",
+    "test/wiki-remote.git/objects/2d/2dac956f4f5f9e205bb7d8e67816841366f876",
+    "test/wiki-remote.git/objects/74/ed253fe5ad1a91e1cf46f3e78a93a3580d1bab",
+    "test/wiki-remote.git/objects/74",
+    "test/wiki-remote.git/objects/14/d31d0be83b206c3a2fa6235999c4ddf39fd8b9",
+    "test/wikijs-data/repo/entities/projects/payment-service.md",
+    "pipeline/README.md",
+    "test/wikijs-data/repo/entities/projects/api-migration.md",
+    "test/wikijs-data/repo/entities/people/bob.md",
+    "test/wikijs-data/repo/entities/people/alice.md",
+    "test/wikijs-data/repo/concepts/git-sync.md",
     "docs/architecture.md",
-    "README.md"
+    "README.md",
+    "docs/design-deep-dive.md",
+    "test/README.md",
+    "test/wikijs-data/repo/home.md",
+    "test/wikijs-data/repo/entities/projects/test-project.md",
+    "test/wiki-content/entities/projects/test-project.md"
   ]
 }

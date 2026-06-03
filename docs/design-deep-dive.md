@@ -1,6 +1,6 @@
 # エージェント設計と運用課題の詳細検討
 
-> **ステータス**: 作業中 | 2026-06-03
+> **ステータス**: 作業中 | 2026-06-03 | Phase 0.1-0.2, 0.4-0.6 完了（0.3, 0.7 は後回し）
 
 ## 1. エージェントアーキテクチャ
 
@@ -13,6 +13,18 @@
 | **curator** | connector の branch への push でトリガー | 同一ファイルの `status: raw` → `status: curated` に変換。構造化・wikilink 付与 | **高** | Hermes skill（LLM 必須） |
 | **lint-checker** | curator の push でトリガー | schema 違反・重複・wikilink 切れをチェック。失敗 = merge ブロック | 低 | **Python スクリプト（LLM 不要）** |
 | **freshness-checker** | 定期（日次） | `status: curated` のファイルの鮮度を評価。必要なら更新 branch 作成 | 中 | Hermes skill
+
+### 1.1.2 出力エージェント（オプション）
+
+curator の成果物を任意の形式に変換する。Hermes の既存スキルを CI から呼ぶだけで実現できる。
+
+| エージェント | トリガー | 操作 | 使用スキル |
+|------------|----------|------|-----------|
+| **exporter-pdf** | 手動 or 定期 | 指定ページ/コレクションを PDF 化 | `pdf` |
+| **exporter-html** | 手動 or 定期 | 複数ページを 1 つの HTML レポートに結合 | `html-report` |
+| **exporter-pptx** | 手動 | 比較表や構造化データをプレゼン資料に変換 | `pptx` |
+
+単一ソース（Markdown）からマルチフォーマット出力。既存スキル資産を活用するため開発コストゼロ。
 
 ### 1.2 パイプライン構成（CI 駆動）
 
@@ -362,17 +374,19 @@ freshness: 200 ページ × 2K tokens × $0.0028/M = $1.12
 
 ## 4. 実装優先順位
 
-### Phase 0: 実機検証（最優先）
+### Phase 0: 検証（進行中）
 
-| # | 検証項目 | 目的 |
-|---|---------|------|
-| 0.1 | Wiki.js ローカルデプロイ + Git 連携 | 基本動作確認。ディレクトリ構造→ページ階層のマッピング確認 |
-| 0.2 | 手動 Markdown push → Wiki.js 反映 | エージェントの出力が Wiki.js でどう見えるか。status: raw → curated の状態遷移を Wiki.js 上でどう表示するか |
-| 0.3 | OIDC 認証（EntraID シミュレーション） | ACL 連携の実現性 |
-| 0.4 | Page Rules の挙動確認 | パスベース ACL が期待通り動作するか。同一パスで状態だけ変わるファイルの権限は一貫するか |
-| 0.5 | CI 環境の選定と疎通 | GitHub Actions / GitLab CI / Gitea Actions の比較。LLM API へのアクセス可否、オンプレ適合性 |
-| 0.6 | connector → curator の CI 連鎖テスト | branch 作成 → push → 別 job が同一 branch で追従コミット → PR 作成 の一連の流れが実現可能か |
-| 0.7 | 1 つの Confluence スペースを手動で Markdown 化し curator の処理対象を模擬 | 実際のデータで品質検証 |
+| # | 項目 | 備考 | ステータス |
+|---|------|------|-----------|
+| 0.1 | Wiki.js ローカルデプロイ + Git 連携 | 基本動作確認。ディレクトリ構造→ページ階層のマッピング確認 | ✅ 完了（2026-06-03） |
+| 0.2 | 手動 Markdown push → Wiki.js 反映 | エージェントの出力が Wiki.js でどう見えるか。status: raw → curated の状態遷移を Wiki.js 上でどう表示するか | ✅ 完了（2026-06-03） |
+| 0.3 | OIDC 認証（EntraID シミュレーション） | ACL 連携の実現性 | 未着手 |
+| 0.4 | Page Rules の挙動確認 | パスベース ACL が期待通り動作するか。同一パスで状態だけ変わるファイルの権限は一貫するか | ✅ 完了（2026-06-03） |
+| 0.5 | CI 環境の選定と疎通 | GitHub Actions / GitLab CI / Gitea Actions の比較。LLM API へのアクセス可否、オンプレ適合性 | ✅ 完了（2026-06-03） |
+| 0.6 | connector → curator の CI 連鎖テスト | branch 作成 → push → 別 job が同一 branch で追従コミット → PR 作成 の一連の流れが実現可能か | ✅ 完了（2026-06-03） |
+| 0.7 | 1 つの Confluence スペースを手動で Markdown 化し curator の処理対象を模擬 | 実際のデータで品質検証 | 未着手（要 Confluence データ） |
+
+**Phase 0.1-0.2 の検証結果の詳細は §6（Wiki.js Git Storage 検証）を参照。**
 
 ### Phase 1: 基盤（設計確定後）
 
@@ -407,7 +421,7 @@ freshness: 200 ページ × 2K tokens × $0.0028/M = $1.12
 
 ## 5. 未解決の問い
 
-1. **Wiki.js のページ階層と llm-wiki ディレクトリ構造のマッピング**: Wiki.js のナビゲーションは folder/page の 2 階層。entities/teams/platform.md は `entities > teams > platform` になるか？ それとも独自のナビゲーション構造を定義する必要があるか？ → Phase 0 で確認
+1. **Wiki.js のページ階層と llm-wiki ディレクトリ構造のマッピング**: ~~Wiki.js のナビゲーションは folder/page の 2 階層。entities/teams/platform.md は `entities > teams > platform` になるか？~~ → **解決（§6 参照）**: ディレクトリ構造がそのままナビゲーション階層として表示される。`entities/projects/test-project.md` → `entities > projects > test-project`。多階層 OK。
 
 2. **CI 実行環境**: どの CI を使うか。GitHub Actions（クラウド）、GitLab CI（オンプレ可）、Gitea Actions（軽量オンプレ）。オンプレ制約と LLM API へのアクセス経路を考慮する必要がある。
 
@@ -420,3 +434,79 @@ freshness: 200 ページ × 2K tokens × $0.0028/M = $1.12
 6. **著者通知の実現手段**: source_author をどこから取得するか。SharePoint の場合は Graph API の `createdBy` で取れる。Confluence の場合はエクスポート XML に author 情報が含まれるか要確認。これらを connector が確実に取得し frontmatter に書き込めるかは要検証。
 
 7. **確認済みステータスの管理**: 著者が「確認済み」にした場合、その状態をどこに保存するか。Markdown frontmatter に `status: verified` と `verified_by: alice@company.com`、`verified_at: 日時` を書く。Git の commit として残るので監査可能。著者が Wiki.js UI で編集した場合、どうやってその編集が「確認」を意味するのかを判定する必要がある（単なる typo 修正かもしれない）。
+
+---
+
+## 6. Wiki.js Git Storage 検証（Phase 0.1-0.2 結果）
+
+> **検証日**: 2026-06-03 | **環境**: Docker `wikijs-test`（host ネットワーク, `localhost:3000`） | **参照**: `Design Notes/2026/experiments/2026-06-03-wikijs-git-sync-roundtrip.md`
+
+### 6.1 検証環境
+
+| 項目 | 値 |
+|------|-----|
+| Wiki.js バージョン | 2.5.x（Docker イメージ） |
+| ストレージ | Git（SSH モード、ローカル bare repo `/wiki/remote.git`） |
+| 同期 | 双方向、5分間隔 |
+| 管理者 | `admin@llm-wiki.internal` / `admin123` |
+| bare repo パス | `~/projects/llm-wiki-platform/test/wiki-remote.git` |
+| 設定ファイル | `~/projects/llm-wiki-platform/test/wikijs-data/config.yml` |
+
+### 6.2 検証結果
+
+#### 6.2.1 カスタム frontmatter のラウンドトリップ保持
+
+**結論: 完全に保持される。** Wiki.js の `parseMetadata()` は YAML frontmatter を `yaml.safeLoad()` で全解析し、既知のキー（`title`, `description`, `tags`, `isPublished`, `editor`）のみを使用。未知のキーは無視されるが、エクスポート時に再び YAML として書き出されるため、Git 上のファイルではカスタムキーが失われない。
+
+**検証シナリオ**:
+1. `type`, `entity_type`, `status`, `source_url`, `source_author` を含む Markdown を Git に push
+2. Wiki.js がインポート（`Page marked as new`）→ DB にページ作成、表示確認
+3. Git 経由で `status: raw` → `status: curated` に変更 + `curator`, `curated_at`, `tags` 追加 → push
+4. Wiki.js が更新を検出（`Page marked as modified`）→ DB/UI 更新
+
+全カスタムキーがラウンドトリップ後も保持されることを確認。
+
+#### 6.2.2 ディレクトリ構造 → ナビゲーション階層
+
+**結論: ディレクトリ構造がそのままナビゲーションにマッピングされる。** `entities/projects/test-project.md` → `entities > projects > test-project` として表示。多階層のネストも問題なく認識される。
+
+#### 6.2.3 初回 init 時の既存ファイル問題
+
+**問題**: Wiki.js の初回 `init()` → `sync()` では、bare repo に事前に存在するファイルがインポートされない。`currentCommitLog.hash` が undefined のため `git diffSummary` が空になるのが原因。
+
+**回避策**: 初期セットアップ後、全ファイルに対してダミー commit（frontmatter 調整など）を push すれば、次の定期 sync（デフォルト5分）で全ファイルがインポートされる。または `importFromDisk`（`server/modules/storage/disk/common.js`）を手動トリガーする（GraphQL からの呼び出し方は要調査）。
+
+#### 6.2.4 認証モード制限
+
+**結論: ローカル bare repo には SSH モードが必須。** `basic` 認証は HTTP(S) のみ対応。`file://` パスは `https://:@file://...` に変換され失敗する。
+
+#### 6.2.5 手動 sync トリガー
+
+GraphQL API で即時 sync トリガーが可能：
+
+```graphql
+mutation {
+  storage {
+    executeAction(targetKey: "git", handler: "sync") {
+      responseResult { succeeded message }
+    }
+  }
+}
+```
+
+curl からの実行には JWT 認証が必要（`local` ストラテジーでログイン → JWT 取得 → `Authorization: Bearer` ヘッダに付与）。
+
+#### 6.2.6 `published` vs `isPublished` の非対称性
+
+**注意点**: Wiki.js がエクスポートする際のキーは `published`（`injectPageMetadata()` が `page.isPublished.toString()` を `published` として書き出す）だが、インポート時の読み取りキーは `isPublished`（`processPage()` が `_.get(pageData, 'isPublished', ...)` で参照）。Git から投入するファイルで `isPublished: false` にしたい場合は、明示的に `isPublished: false` を frontmatter に書く必要がある。新規ページのデフォルトは `true` なので「公開したい」だけなら対応不要。
+
+### 6.3 設計への影響
+
+| 設計要素 | 影響 | 対応 |
+|----------|------|------|
+| カスタム frontmatter | ✅ 保持される | `type`, `entity_type`, `status`, `source_url`, `source_author`, `curator`, `curated_at` 等すべて使用可能 |
+| ディレクトリ構造 | ✅ ナビゲーションにマッピング | `entities/〜`, `concepts/〜` 等の構造がそのまま Wiki.js の階層に |
+| connector → curator フロー | ✅ Git 経由の更新が反映される | 双方向同期が動作するため CI パイプラインと完全互換 |
+| 初回インポート | ⚠️ 回避策必要 | 初期セットアップ後にダミー commit、または `importFromDisk` 手動呼び出し |
+| ACL | ✅ 動作確認済み | パスベース ACL 正常動作。カスタム frontmatter 直接参照不可だがタグベースルールで代替可能。同一パスで状態遷移しても ACL 一貫（§7 参照） |
+| wikilink 表示 | ⚠️ 変換必要 | `[[wikilink]]` 記法は Wiki.js でリンクとして表示されない。curator が標準 Markdown リンク `[title](rel-path)` に変換する必要がある。内部表現（lint-checker, freshness-checker）には wikilink 形式を維持し、表示用に変換するハイブリッド方式を推奨 |

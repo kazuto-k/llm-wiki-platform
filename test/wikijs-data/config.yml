@@ -1,0 +1,19 @@
+port: 3000
+db:
+  type: sqlite
+  storage: /wiki/data/wiki.sqlite
+logLevel: info
+dataPath: /wiki/data
+ssl:
+  enabled: false
+storage:
+  git:
+    authType: basic
+    repoUri: /wiki/remote.git
+    branch: master
+    defaultAuthorEmail: wiki@llm-wiki.internal
+    defaultAuthorName: Wiki.js
+    localRepoPath: /wiki/data/repo
+    syncDirection: bi
+    syncInterval: 5
+    verifySSL: false

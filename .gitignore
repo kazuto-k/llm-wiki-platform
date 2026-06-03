@@ -1,0 +1,15 @@
+# Runtime data
+test/wikijs-data/
+test/wiki-remote.git/
+test/ssh-key/
+
+# Obsidian workspace
+.obsidian/workspace.json
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

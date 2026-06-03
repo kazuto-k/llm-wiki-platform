@@ -1,0 +1,8 @@
+entities:
+  required: [title, entity_type, status]
+  entity_types: [person, team, project, technology, process]
+concepts:
+  required: [title, status]
+  tags: optional
+comparisons:
+  required: [title, items, status]
