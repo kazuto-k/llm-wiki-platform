@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/architecture.md",
+                "file": "docs/design-deep-dive.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "architecture"
+              "title": "design-deep-dive"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs/architecture.md",
+                "file": "docs/design-deep-dive.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "architectureへのバックリンク"
+              "title": "design-deep-diveへのバックリンク"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs/architecture.md",
+                "file": "docs/design-deep-dive.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "architectureからのアウトゴーイングリンク"
+              "title": "design-deep-diveからのアウトゴーイングリンク"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/architecture.md",
+                "file": "docs/design-deep-dive.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "architectureのアウトライン"
+              "title": "design-deep-diveのアウトライン"
             }
           }
         ]
@@ -185,6 +185,7 @@
   },
   "active": "9448760072d1160d",
   "lastOpenFiles": [
+    "docs/architecture.md",
     "README.md"
   ]
 }

@@ -6,60 +6,74 @@
 
 ### 1.1 エージェント一覧と責務
 
-| エージェント | トリガー | 書き込み先 | リスク | 公開モデル |
-|------------|----------|-----------|--------|-----------|
-| **connector-confluence** | 手動（初回インポート） | raw/confluence/ | 低 | raw/ は admin only。表示されない |
-| **connector-sharepoint** | 定期（15〜60分） | raw/sharepoint/ | 低 | raw/ は admin only |
-| **connector-teams** | 定期 | raw/teams/ | 中（会話ログの機密性） | raw/ は admin only |
-| **curator** | raw/ 更新検出時 | entities/, concepts/ | **高**（構造化品質・誤分類） | auto-merge で即公開。元の著者に事後通知 |
-| **lint-checker** | PR 時 + 定期 | なし（レポートのみ） | 低 | curator の PR をブロックするゲート |
-| **freshness-checker** | 定期（日次） | 既存ページ更新 or PR | 中（誤判定） | auto-merge + 最終編集者に事後通知 |
+| エージェント | トリガー | 操作 | リスク | 公開モデル |
+|------------|----------|------|--------|-----------|
+| **connector-confluence** | 手動（初回インポート） | エクスポート XML を Markdown に変換し、適切なパスに `status: raw` で commit | 低 | Wiki.js ACL が即時適用 |
+| **connector-sharepoint** | 定期（15〜60分） | SharePoint の新規/更新ドキュメントを取得し、branch 作成 → `status: raw` で commit | 低 | 同上 |
+| **curator** | connector の branch への push でトリガー | 同一ファイルの `status: raw` → `status: curated` に変換。構造化・wikilink 付与 | **高** | auto-merge 即公開 + 著者通知 |
+| **lint-checker** | curator の push でトリガー | schema 違反・重複・wikilink 切れをチェック。失敗 = merge ブロック | 低 | CI ゲート |
+| **freshness-checker** | 定期（日次） | `status: curated` のファイルの鮮度を評価。必要なら更新 branch 作成 | 中 | auto-merge + 著者通知 |
 
-### 1.2 パイプライン構成
+### 1.2 パイプライン構成（CI 駆動）
+
+エージェントは Git リポジトリの CI パイプラインとして実行される。Hermes cron のような外部スケジューラではなく、Git のイベント（push, schedule）で駆動する。
 
 ```
-[定期トリガー or webhook]
+[定期スケジュール or SharePoint webhook]
          │
          ▼
-   connector-* （raw/ に pull）
+   connector-sharepoint（CI job）
+   新規/更新ドキュメントを取得
+   branch: connector/sp/2026-06-03-1 を作成
+   ファイルを status: raw で commit → push
          │
          ▼
-   curator （raw/ → entities/concepts 再編成）
+   curator（CI job、branch への push でトリガー）
+   同一 branch 上で status: raw → curated に変換
+   frontmatter 補完、wikilink 付与、構造化
+   commit → push
          │
-         ├── lint-checker（CI。失敗 = ブロック）
+         ├── lint-checker（CI job、curator の push でトリガー）
+         │   失敗 → PR ブロック、curator に再処理指示
+         │   成功 → 後続へ
          │
          ▼
-   auto-merge（lint 通過 = 即公開）
+   PR 作成 → auto-merge（lint 通過 = 即 merge）
          │
          ├── Wiki.js 同期（5分以内に表示反映）
          │
-         └── 著者通知（「あなたの文書が AI に整理されました」）
+         └── 著者通知（source_author 宛）
+              「あなたの文書が AI によって整理されました」
          │
          ▼
-   freshness-checker（鮮度評価 → 更新 or 著者通知）
+   freshness-checker（CI job、日次 schedule）
+   status: curated のファイルを走査
+   鮮度低下を検出 → 更新 branch 作成 → curator 同様のフロー
 ```
 
-- **事前レビューはしない**: 全件事前承認は回らない。Confluence が死んだのと同じ理由。
-- **ゲートは CI（lint）のみ**: 機密スキャン、重複検出、wikilink 整合性。機械的に判定できるものだけ。
-- **事後通知が主**: 元の文書の著者に「AI がこう整理した。問題あれば修正を」と通知。
-- **著者が修正したらそれが正**: curator の出力より人間の修正が優先。
+**設計上のポイント**:
+
+- **raw は「場所」ではなく「状態」**: `raw/` ディレクトリは存在しない。status: raw は frontmatter の一時的な値であり、curator の処理を経て status: curated に遷移する
+- **同一ファイル、同一パス**: connector が最初に正しいパス（entities/〜、concepts/〜）に配置する。curator はその場で内容を改善する。ファイルが移動しないので Wiki.js の ACL が一貫する
+- **Git の working tree が作業場**: 外部の raw/ ステージング領域不要。branch 上の working tree で全処理が完結
+- **イベント駆動**: connector の push → curator 起動 → lint 起動。Git の標準的な CI トリガーで連鎖
 
 ### 1.3 Git コミッター設計
 
 各エージェントに個別の Git ユーザーを割り当て、コミットログで追跡可能にする：
 
 ```
-llm-wiki-bot <bot@llm-wiki.internal>          # 全般
-curator-bot <curator@llm-wiki.internal>       # 編纂
-connector-sp-bot <sp-connector@llm-wiki.internal>  # SharePoint
-connector-teams-bot <teams-connector@llm-wiki.internal>
-freshness-bot <freshness@llm-wiki.internal>
+curator-bot <curator@llm-wiki.internal>              # 編纂
+connector-sp-bot <sp-connector@llm-wiki.internal>     # SharePoint
+connector-conf-bot <conf-connector@llm-wiki.internal>  # Confluence
+freshness-bot <freshness@llm-wiki.internal>           # 鮮度チェック
 ```
 
 コミットメッセージ規約：
 ```
-[curator] restructure raw/confluence/space-x → entities/projects/foo
-[lint] fix broken wikilinks in concepts/architecture
+[curator] transform status: raw → curated
+[curator] add wikilinks to entities/projects/foo
+[connector-sp] import from https://sharepoint.internal/.../doc
 [freshness] flag entities/teams/bar as stale (last updated 2025-12-01)
 ```
 
@@ -75,8 +89,7 @@ title: "プロジェクト X アーキテクチャ概要"
 type: entity          # entity | concept | comparison
 entity_type: project  # person | team | project | technology | ...
 status: curated       # raw | draft | curated | stale
-source: raw/confluence/space-engineering/page-42
-source_url: https://confluence.internal/display/ENG/Arch
+source_url: https://confluence.internal/display/ENG/Arch  # 元文書の URL（raw の所在ではない）
 source_author: alice@company.com    # 元の文書の著者。通知先
 last_curated: 2026-06-03T14:00:00Z
 curated_by: curator-bot
@@ -87,8 +100,8 @@ related: [[entities/teams/platform]], [[concepts/k8s-best-practices]]
 ```
 
 これにより：
-- **来歴追跡**: どの raw ソースから生成されたか
-- **鮮度判断**: last_curated と source の更新日を比較
+- **来歴追跡**: source_url で元文書を参照可能。Git の初期コミットに生データが残る
+- **鮮度判断**: last_curated と source_url 先の更新日を比較
 - **信頼度表示**: confidence が低いものは人間レビューが必要
 - **自動タグ**: エージェントが生成、人間が修正可能
 - **著者追跡**: source_author を元の文書から引き継ぎ、通知先として使用
@@ -293,11 +306,12 @@ freshness: 200 ページ × 2K tokens × $0.0028/M = $1.12
 | # | 検証項目 | 目的 |
 |---|---------|------|
 | 0.1 | Wiki.js ローカルデプロイ + Git 連携 | 基本動作確認。ディレクトリ構造→ページ階層のマッピング確認 |
-| 0.2 | 手動 Markdown push → Wiki.js 反映 | エージェントの出力が Wiki.js でどう見えるか |
+| 0.2 | 手動 Markdown push → Wiki.js 反映 | エージェントの出力が Wiki.js でどう見えるか。status: raw → curated の状態遷移を Wiki.js 上でどう表示するか |
 | 0.3 | OIDC 認証（EntraID シミュレーション） | ACL 連携の実現性 |
-| 0.4 | Page Rules の挙動確認 | パスベース ACL が期待通り動作するか |
-| 0.5 | raw/ → entities の手動変換テスト | 1 つの Confluence スペースを手動で Markdown 化し、curator の処理対象を模擬 |
-| 0.6 | GraphQL API の操作テスト | エージェントが API 経由で Wiki.js を操作できるか |
+| 0.4 | Page Rules の挙動確認 | パスベース ACL が期待通り動作するか。同一パスで状態だけ変わるファイルの権限は一貫するか |
+| 0.5 | CI 環境の選定と疎通 | GitHub Actions / GitLab CI / Gitea Actions の比較。LLM API へのアクセス可否、オンプレ適合性 |
+| 0.6 | connector → curator の CI 連鎖テスト | branch 作成 → push → 別 job が同一 branch で追従コミット → PR 作成 の一連の流れが実現可能か |
+| 0.7 | 1 つの Confluence スペースを手動で Markdown 化し curator の処理対象を模擬 | 実際のデータで品質検証 |
 
 ### Phase 1: 基盤（設計確定後）
 
@@ -334,14 +348,14 @@ freshness: 200 ページ × 2K tokens × $0.0028/M = $1.12
 
 1. **Wiki.js のページ階層と llm-wiki ディレクトリ構造のマッピング**: Wiki.js のナビゲーションは folder/page の 2 階層。entities/teams/platform.md は `entities > teams > platform` になるか？ それとも独自のナビゲーション構造を定義する必要があるか？ → Phase 0 で確認
 
-2. **raw/ の扱い**: Wiki.js 上で raw/ は admin-only だが、Git 上ではエージェントが全アクセス。raw/ を Git サブモジュールにして物理的に分離すべきか？ あるいは単一リポジトリで ACL は Wiki.js に任せるか？
+2. **CI 実行環境**: どの CI を使うか。GitHub Actions（クラウド）、GitLab CI（オンプレ可）、Gitea Actions（軽量オンプレ）。オンプレ制約と LLM API へのアクセス経路を考慮する必要がある。
 
-3. **エージェント実行環境**: Hermes cron job？ GitHub Actions？ GitLab CI？ オンプレ制約があるなら GitLab CI が現実的か。
+3. **connector のパス決定ロジック**: SharePoint のドキュメントを取得したとき、どのパス（entities/〜、concepts/〜）に配置するかを connector がどう判断するか。SharePoint のサイト構造やメタデータから推測するのか、それとも connector は常に特定のパスに置き curator が移動も行うのか。
 
 4. **検索**: Wiki.js の組み込み検索（PostgreSQL FTS / Elasticsearch）は ACL を尊重する。だがエージェントが横断的に検索する場合、ACL をバイパスして Git の内容を直接 grep することになる。この「検索の二重構造」をどう説明するか。
 
 5. **マルチテナント**: 今回の対象は 1 組織だが、将来複数組織が使う場合のテナント分離。Git リポジトリを組織ごとに分割？ Wiki.js インスタンスを組織ごとに立てる？
 
-6. **著者通知の実現手段**: source_author をどこから取得するか。SharePoint の場合は Graph API の `createdBy` で取れる。Confluence の場合はエクスポート XML に author 情報が含まれるか要確認。Teams の場合は投稿者。これらを connector が確実に取得し frontmatter に書き込めるかは要検証。
+6. **著者通知の実現手段**: source_author をどこから取得するか。SharePoint の場合は Graph API の `createdBy` で取れる。Confluence の場合はエクスポート XML に author 情報が含まれるか要確認。これらを connector が確実に取得し frontmatter に書き込めるかは要検証。
 
 7. **確認済みステータスの管理**: 著者が「確認済み」にした場合、その状態をどこに保存するか。Markdown frontmatter に `status: verified` と `verified_by: alice@company.com`、`verified_at: 日時` を書く。Git の commit として残るので監査可能。著者が Wiki.js UI で編集した場合、どうやってその編集が「確認」を意味するのかを判定する必要がある（単なる typo 修正かもしれない）。
