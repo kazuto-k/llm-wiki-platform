@@ -7,7 +7,8 @@ Usage:
 
 import argparse, subprocess, sys, os
 
-REPO_URL = os.path.expanduser("~/projects/llm-wiki-platform/test/wiki-remote.git")
+_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_URL = os.path.join(_BASE, "test/wiki-remote.git")
 
 def run(cmd, cwd=None):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=cwd)

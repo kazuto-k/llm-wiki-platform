@@ -13,7 +13,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_URL="$HOME/projects/llm-wiki-platform/test/wiki-remote.git"
+REPO_URL="$HOME/workspace/llm-wiki-platform/test/wiki-remote.git"
 WORK_DIR="/tmp/llm-wiki-pipeline-$$"
 
 cleanup() {

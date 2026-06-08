@@ -12,8 +12,9 @@ Usage:
 import argparse, subprocess, sys, os, datetime, uuid, yaml
 from pathlib import Path
 
-REPO_URL = os.path.expanduser("~/projects/llm-wiki-platform/test/wiki-remote.git")
-SCHEMA_PATH = os.path.expanduser("~/projects/llm-wiki-platform/test/wiki-content/meta/schema.yaml")
+_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_URL = os.path.join(_BASE, "test/wiki-remote.git")
+SCHEMA_PATH = os.path.join(_BASE, "test/wiki-content/meta/schema.yaml")
 WORK_DIR = "/tmp/llm-wiki-connector"
 
 # --- Content template per entity_type ---
@@ -190,8 +191,15 @@ def main():
     # Commit and push
     author_name = args.author.split("@")[0].replace(".", " ").title()
     author_email = args.author
+    env = {**os.environ, "GIT_COMMITTER_NAME": "connector-bot", "GIT_COMMITTER_EMAIL": "connector@llm-wiki.internal"}
     run(f"git add {file_path}", cwd=WORK_DIR)
-    run(f"git commit -m '[connector] import {file_path} (status: raw)' --author=\"{author_name} <{author_email}>\"", cwd=WORK_DIR)
+    result = subprocess.run(
+        f"git commit -m '[connector] import {file_path} (status: raw)' --author=\"{author_name} <{author_email}>\"",
+        shell=True, capture_output=True, text=True, cwd=WORK_DIR, env=env
+    )
+    if result.returncode != 0:
+        print(f"[ERROR] git commit\n{result.stderr}")
+        sys.exit(1)
     run(f"git push origin {branch}", cwd=WORK_DIR)
 
     print(f"[OK] Branch: {branch}")

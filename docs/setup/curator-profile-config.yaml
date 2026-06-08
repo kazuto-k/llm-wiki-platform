@@ -1,0 +1,20 @@
+# llm-wiki-curator Hermesプロファイル設定
+# 配置先: ~/.hermes/profiles/llm-wiki-curator/config.yaml
+# スキル: skills/llm-wiki-curator/SKILL.md を
+#         ~/.hermes/profiles/llm-wiki-curator/skills/devops/llm-wiki-curator/SKILL.md にコピーすること
+
+model:
+  provider: custom:ollama-local
+  default: gemma4:12b           # 環境に合わせて変更可 (例: gemma3:12b)
+providers:
+  custom:ollama-local:
+    base_url: http://localhost:11434/v1   # OllamaのURL（環境変数 OLLAMA_BASE_URL で上書き可）
+    api_key: ollama
+    api_mode: openai
+agent:
+  max_turns: 10
+toolsets:
+  - hermes-cli
+display:
+  language: ja
+  final_response_markdown: strip
