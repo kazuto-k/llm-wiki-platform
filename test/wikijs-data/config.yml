@@ -8,7 +8,8 @@ ssl:
   enabled: false
 storage:
   git:
-    authType: basic
+    authType: ssh
+    sshPrivateKeyPath: /wiki/data/secure/git-ssh
     repoUri: /wiki/remote.git
     branch: master
     defaultAuthorEmail: wiki@llm-wiki.internal
