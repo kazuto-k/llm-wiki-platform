@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """curator: branch 上の status: raw ファイルを curated に変換する。
 
-hermes --profile llm-wiki-curator chat --skill llm-wiki-curator を呼び出して変換する。
+Ollama の OpenAI 互換エンドポイントを直接 Python から呼び出して変換する。
 
 Usage:
     python3 curator.py /tmp/llm-wiki-work --branch connector/entity/platform-team-20260608
@@ -9,13 +9,60 @@ Usage:
 
 import argparse, subprocess, sys, os, yaml, json, datetime
 from pathlib import Path
+from openai import OpenAI
 
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO_URL = os.path.join(_BASE, "test/wiki-remote.git")
 CURATOR_NAME = "curator-bot"
 CURATOR_EMAIL = "curator@llm-wiki.internal"
-HERMES_PROFILE = "llm-wiki-curator"
-HERMES_SKILL = "llm-wiki-curator"
+OLLAMA_BASE_URL = "http://localhost:11434/v1"
+OLLAMA_MODEL = "gemma4:12b"
+
+# llm-wiki-curator スキルのプロンプト（system prompt として使用）
+SYSTEM_PROMPT = """\
+以下の処理を行い、**変換後のMarkdown全文**のみを出力せよ。説明文や前置きは不要。
+
+### 1. frontmatterの更新
+- `status`: `raw` → `curated`
+- `description`: 本文から100字以内で要約して設定
+- `tags`: タイトル・本文のキーワードからカンマ区切りで設定（3〜7個）
+- `curator`: `curator-bot`
+- `curated_at`: 現在日時（ISO8601）
+- `confidence`: 変換品質の自己評価（0.0〜1.0）
+
+### 2. 本文の整形
+- 口語・箇条書きの羅列を技術文書らしく整形
+- 不足している情報は「※未確認」「※要確認」と注記
+- 内容の削除は行わない（削除理由を注記する）
+- Markdown の見出し（#/##/###）・太字（**）・水平線（---）は維持すること
+
+### 3. wikilinkの付与
+- 既存ページ（`existing_pages`として渡される）への参照は `[[ページパス|表示名]]` 形式でリンク
+- 未作成ページへの参照は `⚠ [[ページ名]]（ページ未作成）` と注記
+
+## 出力形式
+
+必ず以下の形式で出力すること：
+
+```
+---
+title: ...
+type: ...
+status: curated
+description: ...
+tags: ...
+curator: curator-bot
+curated_at: ...
+confidence: ...
+---
+
+# タイトル
+
+本文...
+```
+
+**frontmatterと本文のみ。説明・前置き・後書き一切不要。出力の先頭は必ず `---` から始めること。**
+"""
 
 
 def run(cmd, cwd=None, check=True):
@@ -68,61 +115,49 @@ def get_existing_pages(repo_path):
     return pages
 
 
-def curate_file_with_hermes(file_info, repo_path):
-    """hermes chat でLLMを呼び出してファイルをcurateする。"""
+def curate_file_with_ollama(file_info, repo_path):
+    """Ollama OpenAI互換エンドポイントを直接呼び出してファイルをcurateする。"""
     existing_pages = get_existing_pages(repo_path)
 
-    prompt_data = {
+    # ユーザーメッセージ：frontmatter + body + existing_pages を渡す
+    # frontmatterのdateなどをJSONシリアライズ可能な形式に変換
+    import datetime as _dt
+    def _json_safe(obj):
+        if isinstance(obj, (_dt.date, _dt.datetime)):
+            return obj.isoformat()
+        return str(obj)
+
+    user_message = json.dumps({
         "path": file_info["path"],
         "frontmatter": file_info["frontmatter"],
         "body": file_info["body"],
         "existing_pages": existing_pages,
-    }
-    prompt = json.dumps(prompt_data, ensure_ascii=False)
+    }, ensure_ascii=False, indent=2, default=_json_safe)
 
-    print(f"[curator] Calling hermes for: {file_info['path']}")
-    result = subprocess.run(
-        [
-            "hermes",
-            "chat",
-            "--skill", HERMES_SKILL,
-            "-q", prompt,
+    print(f"[curator] Calling Ollama ({OLLAMA_MODEL}) for: {file_info['path']}")
+
+    client = OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
+    response = client.chat.completions.create(
+        model=OLLAMA_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
         ],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "HERMES_HOME": os.path.expanduser(f"~/.hermes/profiles/{HERMES_PROFILE}")},
+        temperature=0.2,
     )
 
-    if result.returncode != 0:
-        print(f"[ERROR] hermes call failed:\n{result.stderr}")
-        return False
+    output = response.choices[0].message.content.strip()
 
-    output = result.stdout.strip()
-
-    # hermesの出力からMarkdown部分を抽出
-    # ボックス描画文字や装飾行を除去して---で始まる部分を探す
-    lines = output.split("\n")
-    start_idx = None
-    for i, line in enumerate(lines):
-        # 制御文字・ボックス描画文字を除去してチェック
-        clean = line.strip().replace("\r", "")
-        if clean == "---":
-            start_idx = i
-            break
-
-    if start_idx is not None:
-        output = "\n".join(lines[start_idx:])
-        # セッション情報などの末尾ゴミを除去
-        end_markers = ["hermes --resume", "Session:", "Duration:", "Messages:"]
-        end_idx = len(output.split("\n"))
-        for j, line in enumerate(output.split("\n")):
-            if any(m in line for m in end_markers):
-                end_idx = j
-                break
-        output = "\n".join(output.split("\n")[:end_idx]).strip()
+    # コードブロックで囲まれている場合は除去
+    if output.startswith("```"):
+        lines = output.split("\n")
+        # 先頭の ``` 行と末尾の ``` 行を除去
+        start = 1 if lines[0].startswith("```") else 0
+        end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
+        output = "\n".join(lines[start:end]).strip()
 
     if not output.startswith("---"):
-        print(f"[ERROR] Could not find frontmatter in output:\n{output[:300]}")
+        print(f"[ERROR] LLM output does not start with '---':\n{output[:300]}")
         return False
 
     # ファイルに書き戻す
@@ -154,7 +189,7 @@ def main():
     # Curate each file
     curated = 0
     for f_info in raw_files:
-        if curate_file_with_hermes(f_info, repo_path):
+        if curate_file_with_ollama(f_info, repo_path):
             curated += 1
             print(f"[curator] Curated: {f_info['path']} (raw → curated)")
         else:
