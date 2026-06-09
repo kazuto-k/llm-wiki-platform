@@ -16,7 +16,7 @@ import json
 
 # デフォルトエンドポイント（環境変数で上書き可能）
 import os
-WIKIJS_URL = os.environ.get("WIKIJS_URL", "http://100.75.63.85:3000")
+WIKIJS_URL = os.environ.get("WIKIJS_URL", "http://100.123.96.116:3000")
 GRAPHQL_ENDPOINT = WIKIJS_URL + "/graphql"
 DEFAULT_LOCALE = "ja"
 
