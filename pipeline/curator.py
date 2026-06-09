@@ -15,7 +15,7 @@ _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO_URL = os.path.join(_BASE, "test/wiki-remote.git")
 CURATOR_NAME = "curator-bot"
 CURATOR_EMAIL = "curator@llm-wiki.internal"
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
+OLLAMA_BASE_URL = "http://100.75.63.85:11434/v1"
 OLLAMA_MODEL = "gemma4:12b"
 
 # llm-wiki-curator スキルのプロンプト（system prompt として使用）
