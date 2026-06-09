@@ -13,9 +13,49 @@ wikijs_api.py — Wiki.js GraphQL API ヘルパー
 
 import urllib.request
 import json
+import os
+from pathlib import Path
+
+
+# ──────────────────────────────────────────
+# .env 自己ロード（未設定の環境変数のみ補完）
+# ──────────────────────────────────────────
+
+def _load_dotenv():
+    """
+    .env ファイルを探してロードする。
+    優先順位:
+      1. HERMES_HOME 環境変数が指すディレクトリの .env
+      2. ~/.hermes/profiles/itaru-hashida/.env（ダルのデフォルト）
+      3. ~/.hermes/.env
+    既にセットされている環境変数は上書きしない。
+    """
+    candidates = []
+    hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        candidates.append(Path(hermes_home) / ".env")
+    candidates += [
+        Path.home() / ".hermes" / "profiles" / "itaru-hashida" / ".env",
+        Path.home() / ".hermes" / "profiles" / "mayuri-shiina" / ".env",
+        Path.home() / ".hermes" / ".env",
+    ]
+    for dotenv_path in candidates:
+        if dotenv_path.exists():
+            with open(dotenv_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key = key.strip()
+                    val = val.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+            break  # 最初に見つかったファイルだけ読む
+
+_load_dotenv()
 
 # デフォルトエンドポイント（環境変数で上書き可能）
-import os
 WIKIJS_URL = os.environ.get("WIKIJS_URL", "http://100.123.96.116:3000")
 GRAPHQL_ENDPOINT = WIKIJS_URL + "/graphql"
 DEFAULT_LOCALE = "ja"
@@ -232,6 +272,48 @@ def create_page_with_parents(jwt, path, title, content, description="", tags=Non
 
     # 本命ページを作成
     return create_page(jwt, path, title, content, description=description, tags=tags, locale=locale)
+
+
+# ──────────────────────────────────────────
+# コメント
+# ──────────────────────────────────────────
+
+def list_comments(jwt, path, locale=None):
+    """指定パスのページについたコメント一覧を返す。"""
+    locale = locale or DEFAULT_LOCALE
+    data = _graphql(
+        """
+        query($locale: String!, $path: String!) {
+          comments {
+            list(locale: $locale, path: $path) {
+              id content createdAt updatedAt authorName authorEmail
+            }
+          }
+        }
+        """,
+        variables={"locale": locale, "path": path},
+        token=jwt,
+    )
+    return data["comments"]["list"]
+
+
+def list_all_recent_comments(jwt, locale=None):
+    """全ページの最新コメントを返す（Wiki.js APIが対応している場合）。"""
+    locale = locale or DEFAULT_LOCALE
+    data = _graphql(
+        """
+        query($locale: String!) {
+          comments {
+            list(locale: $locale, path: "") {
+              id pageId content createdAt authorName
+            }
+          }
+        }
+        """,
+        variables={"locale": locale},
+        token=jwt,
+    )
+    return data["comments"]["list"]
 
 
 # ──────────────────────────────────────────
