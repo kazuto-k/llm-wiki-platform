@@ -1,8 +1,389 @@
-entities:
-  required: [title, entity_type, status]
-  entity_types: [person, team, project, technology, process]
-concepts:
-  required: [title, status]
-  tags: optional
-comparisons:
-  required: [title, items, status]
+# ============================================================
+# Cognitive Ark Schema v2.0
+# ============================================================
+# 策定: 牧瀬紅莉栖 | 2026-06-09
+# 用途: パイプライン（connector → curator → lint → merge）の
+#       frontmatter 検証・状態遷移・表示制御の単一情報源 (SSOT)
+#
+# 設計原則:
+#   - frontmatter は確定的 Python ロジックで処理（LLM 不確実性の分離）
+#   - LLM は本文 (body) の品質向上のみ担当
+#   - Git が SSOT。Wiki.js は表示ミラー
+# ============================================================
+
+version: "2.0"
+
+# ============================================================
+# 1. フィールド定義 — 全タイプ共通
+# ============================================================
+field_definitions:
+  # --- システム管理フィールド（確定的ロジックのみ）---
+  type:
+    type: string
+    required: true
+    managed_by: system
+    values: [entity, concept, meeting, comparison]
+    description: ドキュメントの種類
+
+  status:
+    type: string
+    required: true
+    managed_by: system  # ステートマシンが管理。LLM 変更不可
+    default: raw
+    values: [raw, draft, curated, lint, merge, protected, stale]
+    description: パイプライン上の状態
+
+  curator:
+    type: string
+    managed_by: system
+    description: curator を実行したボット名（システム自動付与）
+
+  curated_at:
+    type: datetime
+    managed_by: system
+    description: curator 実行日時（Python datetime.now() が注入）
+
+  confidence:
+    type: float
+    managed_by: system
+    default: 0.85
+    description: curator の信頼度スコア
+
+  curation_profile:
+    type: string
+    managed_by: system  # ユーザー選択を保存、システムが解釈
+    default: auto
+    values: [auto, skip, minimal, restyle, verify]
+    description: 保存時にユーザーが指定するキュレーションの種別
+
+  # --- システム蓄積フィールド（ユーザー非表示、AI/システムのための裏側領域）---
+  curated_body:
+    type: string
+    managed_by: system
+    hidden: true
+    description: >
+      curator が変換した本文の完全なコピー。
+      curation_profile=skip 時も裏で保存可能。
+      検索・分析・再処理の参照用。ユーザーには表示しない。
+
+  system_tags:
+    type: list
+    managed_by: system
+    hidden: true
+    description: >
+      AI が自動付与したタグ。ユーザー指定の tags とは独立。
+      ユーザーがタグを付けなくても、システムはこのフィールドで
+      構造化された検索・分類が可能。
+
+  system_summary:
+    type: string
+    managed_by: system
+    hidden: true
+    description: >
+      AI が生成した要約。ユーザーが本文を curation しなくても
+      裏側で自動生成可能。横断検索・知識グラフ構築に利用。
+
+  created_at:
+    type: datetime
+    managed_by: system
+    description: ドキュメント作成日時
+
+  updated_at:
+    type: datetime
+    managed_by: system
+    description: 最終更新日時
+
+  # --- コンテンツ記述フィールド（ユーザー入力 / LLM 提案可）---
+  title:
+    type: string
+    required: true
+    managed_by: user  # LLM は正規化提案のみ可能
+    description: ドキュメントのタイトル
+
+  tags:
+    type: list
+    managed_by: llm_assisted  # LLM が提案、schema バリデーション後に採用
+    description: 内容を表すタグ（カンマ区切り、3〜6個推奨）
+
+  source_author:
+    type: string
+    managed_by: user
+    description: 元の作成者
+
+  # --- タイプ固有フィールド ---
+  entity_type:
+    type: string
+    managed_by: user
+    applies_to: [entity]
+    required_for: [entity]
+    values: [person, team, project, technology, process]
+    description: エンティティの種別
+
+  meeting_type:
+    type: string
+    managed_by: user
+    applies_to: [meeting]
+    required_for: [meeting]
+    description: 会議の種別（自由記述）
+
+  date:
+    type: date
+    managed_by: user
+    applies_to: [meeting]
+    required_for: [meeting]
+    format: YYYY-MM-DD
+    description: 会議開催日
+
+  participants:
+    type: list
+    managed_by: user
+    applies_to: [meeting]
+    description: 参加者リスト
+
+  platform:
+    type: string
+    managed_by: user
+    applies_to: [meeting]
+    description: 会議プラットフォーム（Matrix, Discord 等）
+
+  items:
+    type: list
+    managed_by: user
+    applies_to: [comparison]
+    required_for: [comparison]
+    description: 比較対象アイテムのリスト
+
+# ============================================================
+# 2. ドキュメントタイプ定義
+# ============================================================
+document_types:
+  entity:
+    required: [title, type, entity_type, status]
+    optional: [tags, source_author, created_at, updated_at,
+               curator, curated_at, confidence, curation_profile,
+               curated_body, system_tags, system_summary]
+    entity_type_values: [person, team, project, technology, process]
+
+  concept:
+    required: [title, type, status]
+    optional: [tags, source_author, created_at, updated_at,
+               curator, curated_at, confidence, curation_profile,
+               curated_body, system_tags, system_summary]
+
+  meeting:
+    required: [title, type, status, date, meeting_type]
+    optional: [participants, platform, tags, source_author,
+               created_at, updated_at, curator, curated_at, confidence,
+               curation_profile, curated_body, system_tags, system_summary]
+
+  comparison:
+    required: [title, type, status, items]
+    optional: [tags, source_author, created_at, updated_at,
+               curator, curated_at, confidence, curation_profile,
+               curated_body, system_tags, system_summary]
+
+# ============================================================
+# 3. 状態遷移ステートマシン
+# ============================================================
+status_machine:
+  initial_state: raw
+  terminal_states: [protected]
+
+  states:
+    raw:
+      description: 初期保存状態。未キュレーション。
+      icon: 🔴
+      badge_label: Raw
+      transitions:
+        - to: curated
+          trigger: curation_profile=auto/minimal/restyle/verify で curator 実行完了
+        - to: draft
+          trigger: ユーザーが明示的に下書き指定
+        - to: stale
+          trigger: 一定期間 curation 未実行（自動判定）
+
+    draft:
+      description: 下書き。ユーザーが明示的に作業中とマーク。
+      icon: 📝
+      badge_label: Draft
+      transitions:
+        - to: raw
+          trigger: ユーザーが curation を要求
+        - to: curated
+          trigger: curator を手動実行
+
+    curated:
+      description: curator による処理済み。curated_body が裏側に保存済み。
+      icon: 🟢
+      badge_label: Curated
+      transitions:
+        - to: lint
+          trigger: lint-checker 通過
+        - to: raw
+          trigger: 再キュレーション要求（本文に大幅変更があった場合）
+        - to: stale
+          trigger: curated_at から一定期間経過
+
+    lint:
+      description: lint-checker による検証済み。
+      icon: ✅
+      badge_label: Verified
+      transitions:
+        - to: merge
+          trigger: PR マージ / 手動マージ
+        - to: curated
+          trigger: lint エラー修正後に再 curator 実行
+
+    merge:
+      description: master ブランチにマージ済み。
+      icon: 📦
+      badge_label: Merged
+      transitions:
+        - to: protected
+          trigger: 保護フラグ付与
+        - to: stale
+          trigger: 陳腐化検出
+
+    protected:
+      description: 保護済み。変更不可。
+      icon: 🔒
+      badge_label: Protected
+      transitions: []
+
+    stale:
+      description: 陳腐化。再キュレーションが必要。
+      icon: ⏳
+      badge_label: Stale
+      transitions:
+        - to: raw
+          trigger: 再キュレーション開始
+
+  # 互換性エイリアス（旧スキーマからの移行用）
+  aliases:
+    verified: protected  # lint-checker の旧 valid_statuses に存在
+
+# ============================================================
+# 4. LLM 境界定義
+# ============================================================
+llm_boundary:
+  description: >
+    frontmatter フィールドと本文を分離する境界。
+    deterministic_fields は Python の確定的ロジックのみが
+    変更可能。LLM はこれらのフィールドを一切変更してはならない。
+
+  # Python 確定的ロジックのみが管理
+  deterministic_fields:
+    - status
+    - curator
+    - curated_at
+    - confidence
+    - curation_profile
+    - created_at
+    - updated_at
+    - type
+    - entity_type
+    - curated_body   # LLM 出力を Python が frontmatter に書き込む
+    - system_tags    # 同上
+    - system_summary # 同上
+
+  # LLM が品質向上のために処理可能
+  llm_editable_fields:
+    - body  # 本文のみ。frontmatter は一切含まない
+
+  # LLM が提案し、Python ロジックがバリデーション後に採用
+  llm_assisted_fields:
+    - tags
+    - title  # タイトル正規化提案のみ（元の意味は保持）
+
+# ============================================================
+# 5. キュレーションプロファイル定義
+# ============================================================
+curation_profiles:
+  auto:
+    description: フル curation。現行プロンプトを適用
+    is_default: true
+    llm_prompt: full  # プロンプトテンプレート名
+    status_on_save: raw
+    status_after_curation: curated
+    modifies_body: false  # 本文は表のまま。curated_body は裏に保存
+    target_fields: [curated_body, system_tags, system_summary, tags]
+
+  skip:
+    description: キュレーションを完全スキップ
+    is_default: false
+    llm_prompt: null
+    status_on_save: raw
+    status_after_curation: null
+    modifies_body: false
+    target_fields: []
+
+  minimal:
+    description: 誤字脱字・表記ゆれのみ修正
+    is_default: false
+    llm_prompt: minimal  # 校正特化プロンプト
+    status_on_save: raw
+    status_after_curation: curated
+    modifies_body: false  # 修正本文は curated_body に保存
+    target_fields: [curated_body, system_tags]
+
+  restyle:
+    description: 文体・構造の整理（事実変更なし）
+    is_default: false
+    llm_prompt: restyle  # 文体整理特化プロンプト
+    status_on_save: raw
+    status_after_curation: curated
+    modifies_body: false
+    target_fields: [curated_body, system_tags, system_summary]
+
+  verify:
+    description: ファクトチェック＋リンク切れ検出のみ
+    is_default: false
+    llm_prompt: verify  # 検証特化プロンプト
+    status_on_save: raw
+    status_after_curation: curated
+    modifies_body: false
+    target_fields: [system_tags, system_summary, confidence]
+
+# ============================================================
+# 6. 表示ルール（Wiki.js 向け）
+# ============================================================
+display:
+  # ユーザーから完全に隠蔽するフィールド
+  hidden:
+    - status
+    - curator
+    - curated_at
+    - confidence
+    - curation_profile
+    - created_at
+    - updated_at
+    # システム蓄積フィールド（裏側領域）
+    - curated_body
+    - system_tags
+    - system_summary
+
+  # アイコンバッジとして表示
+  badge:
+    field: status
+    type: icon
+    mapping:
+      raw: "🔴"
+      draft: "📝"
+      curated: "🟢"
+      lint: "✅"
+      merge: "📦"
+      protected: "🔒"
+      stale: "⏳"
+
+  # タグチップとして表示
+  chips:
+    - tags
+    - entity_type
+
+  # メタ情報として表示（サイドバー等）
+  meta_info:
+    - source_author
+    - meeting_type
+    - date
+    - participants
+    - platform
