@@ -18,6 +18,10 @@ from io import StringIO
 from ruamel.yaml import YAML
 from openai import OpenAI
 
+# wikijs_api をパイプラインディレクトリから import
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import wikijs_api as _wikijs
+
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO_URL = os.path.join(_BASE, "test/wiki-remote.git")
 CURATOR_NAME  = "curator-bot"
@@ -295,8 +299,8 @@ def find_raw_files(repo_path: str) -> list[dict]:
     return raw_files
 
 
-def curate_file(file_info: dict) -> bool:
-    """1ファイルをキュレーションして上書き保存する。"""
+def curate_file(file_info: dict) -> str | None:
+    """1ファイルをキュレーションして上書き保存する。curated_body を返す（失敗時は None）。"""
     fm      = file_info["frontmatter"]
     body    = file_info["body"]
     profile = str(fm.get("curation_profile", "auto"))
@@ -313,7 +317,7 @@ def curate_file(file_info: dict) -> bool:
     with open(file_info["full_path"], "w") as f:
         f.write(new_content)
 
-    return True
+    return str(fm.get("curated_body", "")) or None
 
 
 # ──────────────────────────────────────────
@@ -355,9 +359,21 @@ def main():
     curated = 0
     for f_info in raw_files:
         try:
-            if curate_file(f_info):
+            curated_body = curate_file(f_info)
+            if curated_body is not None:
                 curated += 1
                 print(f"[curator] Done: {f_info['path']}")
+                # DB の page.extra.curated_body を更新
+                try:
+                    jwt = _wikijs.login_wiki("admin@llm-wiki.internal", "admin123")
+                    page_id = _wikijs.resolve_page_id(jwt, f_info["wiki_page_path"])
+                    if page_id:
+                        _wikijs.update_extra(jwt, page_id, curated_body)
+                        print(f"[curator] extra.curated_body updated: page_id={page_id}")
+                    else:
+                        print(f"[curator] WARN: page not found in Wiki.js: {f_info['wiki_page_path']}")
+                except Exception as e:
+                    print(f"[curator] WARN: update_extra failed ({e}) — Git 側は保存済み")
         except Exception as e:
             print(f"[ERROR] Failed to curate {f_info['path']}: {e}")
 

@@ -238,6 +238,46 @@ def update_page(jwt, page_id, content, title=None, description="", tags=None, lo
 
 
 # ──────────────────────────────────────────
+# extra フィールド更新（curated_body 等）
+# ──────────────────────────────────────────
+
+def resolve_page_id(jwt, wiki_page_path, locale=None):
+    """wiki_page_path（locale なし）から page_id を返す。見つからなければ None。"""
+    pages = list_pages(jwt)
+    for p in pages:
+        if p["path"] == wiki_page_path:
+            return p["id"]
+    return None
+
+
+def update_extra(jwt, page_id, curated_body):
+    """page.extra.curated_body を GraphQL mutation 経由で更新する。
+
+    wikijs-src の update mutation に curatedBody 引数を追加済み（pages.js が extra に格納）。
+    実装方針（牧瀬氏・岡部合意）:
+      Git Markdown  → 永続化・履歴・SSOT
+      DB page.extra → ランタイム表示（UI が直接読む curated_body をここに置く）
+    """
+    data = _graphql(
+        """
+        mutation($id: Int!, $curatedBody: String!) {
+          pages {
+            update(id: $id, curatedBody: $curatedBody) {
+              responseResult { succeeded message }
+            }
+          }
+        }
+        """,
+        variables={"id": page_id, "curatedBody": curated_body},
+        token=jwt,
+    )
+    result = data["pages"]["update"]
+    if not result["responseResult"]["succeeded"]:
+        raise RuntimeError("update_extra failed: %s" % result["responseResult"]["message"])
+    return True
+
+
+# ──────────────────────────────────────────
 # Ph1.1: 親ページ自動生成
 # ──────────────────────────────────────────
 
