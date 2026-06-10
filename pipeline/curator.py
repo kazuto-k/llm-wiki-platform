@@ -401,6 +401,19 @@ def main():
                         print(f"[curator] WARN: page not found in Wiki.js: {f_info['wiki_page_path']}")
                 except Exception as e:
                     print(f"[curator] WARN: update_extra failed ({e}) — Git 側は保存済み")
+                # l-mail に curate 完了通知を追加
+                try:
+                    import subprocess as _sp
+                    _lm = os.path.join(os.path.dirname(os.path.abspath(__file__)), "l_mail.py")
+                    _sp.run(
+                        [sys.executable, _lm, "add",
+                         f_info["wiki_page_path"],
+                         f"curate 完了: {f_info['wiki_page_path']}",
+                         "--source", "curator"],
+                        timeout=10, capture_output=True,
+                    )
+                except Exception:
+                    pass  # l-mail 失敗はサイレントに無視
         except Exception as e:
             print(f"[ERROR] Failed to curate {f_info['path']}: {e}")
 
