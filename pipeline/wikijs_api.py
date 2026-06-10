@@ -127,7 +127,7 @@ def get_page(jwt, page_id):
     data = _graphql(
         """
         query($id: Int!) {
-          pages { single(id: $id) { id path title content updatedAt } }
+          pages { single(id: $id) { id path title content updatedAt extra curationProfile } }
         }
         """,
         variables={"id": page_id},
