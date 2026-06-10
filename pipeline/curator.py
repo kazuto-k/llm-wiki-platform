@@ -237,7 +237,7 @@ def call_llm(body: str, curation_profile: str) -> dict | None:
 # ──────────────────────────────────────────
 
 def find_raw_files(repo_path: str) -> list[dict]:
-    """status: raw の .md ファイルを列挙する。"""
+    """status: raw の .md ファイルを列挙する。locale プレフィックスは透過的に扱う。"""
     raw_files = []
     for root, dirs, files in os.walk(repo_path):
         dirs[:] = [d for d in dirs if d not in (".git", "meta")]
@@ -249,12 +249,28 @@ def find_raw_files(repo_path: str) -> list[dict]:
                 content = fh.read()
             fm, body = parse_md(content)
             if fm.get("status") == "raw":
+                # repo からの相対パス（例: ja/cognitive-ark/foo.md）
+                rel_path = os.path.relpath(fpath, repo_path)
+                # locale プレフィックスを除いた wiki ページパス（例: cognitive-ark/foo）
+                # 先頭の xx/ が 2文字の locale コードなら strip する
+                parts = rel_path.replace("\\", "/").split("/")
+                if len(parts) > 1 and len(parts[0]) == 2:
+                    wiki_path = "/".join(parts[1:])
+                    locale    = parts[0]
+                else:
+                    wiki_path = rel_path
+                    locale    = None
+                # .md 拡張子を除去
+                wiki_page_path = wiki_path[:-3] if wiki_path.endswith(".md") else wiki_path
+
                 raw_files.append({
-                    "path":      os.path.relpath(fpath, repo_path),
-                    "full_path": fpath,
-                    "frontmatter": fm,
-                    "body":      body,
-                    "content":   content,
+                    "path":           rel_path,       # repo 内の相対パス（locale付き）
+                    "wiki_page_path": wiki_page_path, # locale なし wiki パス（横断処理用）
+                    "locale":         locale,
+                    "full_path":      fpath,
+                    "frontmatter":    fm,
+                    "body":           body,
+                    "content":        content,
                 })
     return raw_files
 
@@ -312,8 +328,9 @@ def main():
 
     print(f"[curator] Found {len(raw_files)} raw file(s):")
     for f in raw_files:
-        profile = f["frontmatter"].get("curation_profile", "auto")
-        print(f"  - {f['path']} (profile={profile})")
+        profile    = f["frontmatter"].get("curation_profile", "auto")
+        locale_tag = f"locale={f['locale']} " if f["locale"] else ""
+        print(f"  - {f['wiki_page_path']} ({locale_tag}profile={profile})")
 
     curated = 0
     for f_info in raw_files:
