@@ -392,7 +392,10 @@ def main():
                 print(f"[curator] Done: {f_info['path']}")
                 # DB の page.extra.curated_body を更新
                 try:
-                    jwt = _wikijs.login_wiki("admin@llm-wiki.internal", "admin123")
+                    jwt = _wikijs.login_wiki(
+                        os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal"),
+                        os.environ.get("WIKIJS_PASSWORD", "admin123"),
+                    )
                     page_id = _wikijs.resolve_page_id(jwt, f_info["wiki_page_path"])
                     if page_id:
                         _wikijs.update_extra(jwt, page_id, curated_body)

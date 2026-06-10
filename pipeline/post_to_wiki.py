@@ -111,8 +111,8 @@ def main():
     args = parser.parse_args()
 
     # 認証
-    email = os.environ.get("WIKIJS_ADMIN_EMAIL", "admin@llm-wiki.internal")
-    password = os.environ.get("WIKIJS_ADMIN_PASS", "admin123")
+    email = os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal")
+    password = os.environ.get("WIKIJS_PASSWORD", "admin123")
     jwt = login_wiki(email, password)
 
     # --list モード

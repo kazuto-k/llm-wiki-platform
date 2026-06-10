@@ -362,8 +362,8 @@ def list_all_recent_comments(jwt, locale=None):
 
 if __name__ == "__main__":
     import sys
-    email = sys.argv[1] if len(sys.argv) > 1 else "admin@llm-wiki.internal"
-    password = sys.argv[2] if len(sys.argv) > 2 else "admin123"
+    email = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal")
+    password = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("WIKIJS_PASSWORD", "admin123")
 
     print("Login as %s ..." % email)
     jwt = login_wiki(email, password)

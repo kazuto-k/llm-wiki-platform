@@ -6,7 +6,7 @@ Usage:
     python3 trigger-sync.py --url http://localhost:3000 --email admin@llm-wiki.internal --password admin123
 """
 
-import urllib.request, json, argparse, sys
+import urllib.request, json, argparse, sys, os
 
 def gql(url, query, jwt=None):
     data = json.dumps({"query": query}).encode()
@@ -24,8 +24,8 @@ def gql(url, query, jwt=None):
 def main():
     parser = argparse.ArgumentParser(description="Trigger Wiki.js Git sync")
     parser.add_argument("--url", default="http://localhost:3000")
-    parser.add_argument("--email", default="admin@llm-wiki.internal")
-    parser.add_argument("--password", default="admin123")
+    parser.add_argument("--email", default=os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal"))
+    parser.add_argument("--password", default=os.environ.get("WIKIJS_PASSWORD", "admin123"))
     args = parser.parse_args()
 
     base_url = args.url.rstrip("/")

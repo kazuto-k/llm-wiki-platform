@@ -87,7 +87,8 @@ def wikijs_login() -> str:
             jwt
           }}
         }
-    """, {"email": "admin@llm-wiki.internal", "password": "admin123"})
+    """, {"email": os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal"),
+           "password": os.environ.get("WIKIJS_PASSWORD", "admin123")})
     return data["data"]["authentication"]["login"]["jwt"]
 
 
