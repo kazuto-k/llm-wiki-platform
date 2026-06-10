@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-lab-notify — ラボメン向け軽量通知 CLI
+l-mail — ラボメン向け軽量通知 CLI
 
 未来ガジェット研究所の通知をSQLiteに記録・管理するだお。
 Wiki、curator、wiki_watcherなどが書き込み、ラボメンが読みに来る（プル型）。
 
 使い方:
-  lab-notify list                      # open な通知一覧
-  lab-notify list --status assigned    # assigned 一覧
-  lab-notify list --all                # 全ステータス
-  lab-notify show <id>                 # 1件の詳細
-  lab-notify add <page> <summary>      # 通知を追加（wiki_watcher等から）
-  lab-notify assign <id> [assignee]    # 自分（または指定者）にアサイン
-  lab-notify done <id>                 # 完了マーク
-  lab-notify unassign <id>             # アサイン解除（open に戻す）
+  l-mail list                      # open な通知一覧
+  l-mail list --status assigned    # assigned 一覧
+  l-mail list --all                # 全ステータス
+  l-mail show <id>                 # 1件の詳細
+  l-mail add <page> <summary>      # 通知を追加（wiki_watcher等から）
+  l-mail assign <id> [assignee]    # 自分（または指定者）にアサイン
+  l-mail done <id>                 # 完了マーク
+  l-mail unassign <id>             # アサイン解除（open に戻す）
 """
 
 import argparse
@@ -24,12 +24,12 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-# DB パス: llm-wiki-platform/data/lab_notify.db（環境変数で上書き可）
-_DEFAULT_DB = Path(__file__).parent.parent / "data" / "lab_notify.db"
-DB_PATH = Path(os.environ.get("LAB_NOTIFY_DB", str(_DEFAULT_DB)))
+# DB パス: llm-wiki-platform/data/l_mail.db（環境変数で上書き可）
+_DEFAULT_DB = Path(__file__).parent.parent / "data" / "l_mail.db"
+DB_PATH = Path(os.environ.get("L_MAIL_DB", str(_DEFAULT_DB)))
 
 # デフォルトのアサイニー（呼び出し元プロファイルか環境変数で設定）
-DEFAULT_ASSIGNEE = os.environ.get("HERMES_PROFILE", os.environ.get("LAB_NOTIFY_ASSIGNEE", "unknown"))
+DEFAULT_ASSIGNEE = os.environ.get("HERMES_PROFILE", os.environ.get("L_MAIL_ASSIGNEE", "unknown"))
 
 
 # ──────────────────────────────────────────
@@ -214,10 +214,10 @@ def cmd_unassign(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="lab-notify",
+        prog="l-mail",
         description="未来ガジェット研究所 軽量通知 CLI",
     )
-    parser.add_argument("--db", help="DB パス（デフォルト: data/lab_notify.db）")
+    parser.add_argument("--db", help="DB パス（デフォルト: data/l_mail.db）")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # add

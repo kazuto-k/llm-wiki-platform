@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-wiki_watcher.py — Wiki.js 更新監視 + lab-notify 書き込み
+wiki_watcher.py — Wiki.js 更新監視 + l-mail 書き込み
 ==========================================================
 Wiki.js で更新されたページ・新規コメントを検出して
-lab_notify.py の SQLite DB に記録する（プル型通知）。
+l_mail.py の SQLite DB に記録する（プル型通知）。
 
 cronジョブ（no_agent=true）で5分おきに実行される。
 直接実行も可能:
@@ -59,12 +59,12 @@ STATE_FILE = Path(os.environ.get(
     Path.home() / ".hermes/profiles/itaru-hashida/scripts/wiki_watcher_state.json",
 ))
 
-# lab_notify.py のパス（このスクリプトと同ディレクトリ）
+# l_mail.py のパス（このスクリプトと同ディレクトリ）
 _SCRIPT_DIR  = Path(__file__).parent
-LAB_NOTIFY   = str(_SCRIPT_DIR / "lab_notify.py")
-LAB_NOTIFY_DB = os.environ.get(
-    "LAB_NOTIFY_DB",
-    str(_SCRIPT_DIR.parent / "data" / "lab_notify.db"),
+L_MAIL   = str(_SCRIPT_DIR / "l_mail.py")
+L_MAIL_DB = os.environ.get(
+    "L_MAIL_DB",
+    str(_SCRIPT_DIR.parent / "data" / "l_mail.db"),
 )
 
 
@@ -110,17 +110,17 @@ def get_comments(jwt: str, path: str) -> list:
     return data["data"]["comments"]["list"]
 
 
-# ── lab-notify 書き込み ──────────────────────────────────
+# ── l-mail 書き込み ──────────────────────────────────
 
-def lab_notify_add(page_path: str, summary: str, source: str = "wiki_watcher",
+def l_mail_add(page_path: str, summary: str, source: str = "wiki_watcher",
                    detail: str = "", dry_run: bool = False):
-    """lab_notify.py の add コマンドを呼ぶ。"""
+    """l_mail.py の add コマンドを呼ぶ。"""
     if dry_run:
-        print(f"[dry-run] lab-notify add '{page_path}' '{summary}' --source {source}")
+        print(f"[dry-run] l-mail add '{page_path}' '{summary}' --source {source}")
         return
     cmd = [
-        sys.executable, LAB_NOTIFY,
-        "--db", LAB_NOTIFY_DB,
+        sys.executable, L_MAIL,
+        "--db", L_MAIL_DB,
         "add", page_path, summary,
         "--source", source,
     ]
@@ -129,11 +129,11 @@ def lab_notify_add(page_path: str, summary: str, source: str = "wiki_watcher",
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode != 0:
-            print(f"[ERROR] lab-notify add 失敗: {result.stderr}", file=sys.stderr)
+            print(f"[ERROR] l-mail add 失敗: {result.stderr}", file=sys.stderr)
         else:
             print(result.stdout.strip())
     except Exception as e:
-        print(f"[ERROR] lab-notify add 例外: {e}", file=sys.stderr)
+        print(f"[ERROR] l-mail add 例外: {e}", file=sys.stderr)
 
 
 # ── 状態管理 ────────────────────────────────────────────
@@ -164,11 +164,11 @@ def fmt_time(iso: str) -> str:
 # ── メイン ──────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Wiki.js 更新監視 + lab-notify 書き込み")
+    parser = argparse.ArgumentParser(description="Wiki.js 更新監視 + l-mail 書き込み")
     parser.add_argument("--comments-only", action="store_true",
                         help="コメント監視のみ実行")
     parser.add_argument("--dry-run", action="store_true",
-                        help="lab-notify に書き込まず内容を表示するだけ")
+                        help="l-mail に書き込まず内容を表示するだけ")
     args = parser.parse_args()
 
     state            = load_state()
@@ -191,7 +191,7 @@ def main():
                 summary = f"ページ更新: {p['title']} ({fmt_time(p['updatedAt'])})"
                 detail  = f"{WIKI_BASE_URL}/{p['path']}"
                 print(f"[wiki-watcher] {summary}")
-                lab_notify_add(p["path"], summary, source="wiki_watcher",
+                l_mail_add(p["path"], summary, source="wiki_watcher",
                                detail=detail, dry_run=args.dry_run)
             seen_page_ids[pid] = p["updatedAt"]
 
@@ -221,7 +221,7 @@ def main():
                 detail  = (f"{WIKI_BASE_URL}/{p['path']}\n"
                            f"{c['content'][:200]}")
                 print(f"[wiki-watcher] {summary}")
-                lab_notify_add(p["path"], summary, source="wiki_watcher_comment",
+                l_mail_add(p["path"], summary, source="wiki_watcher_comment",
                                detail=detail, dry_run=args.dry_run)
 
     if new_page_count == 0 and new_comment_count == 0:
