@@ -41,8 +41,8 @@ DB_PATH = Path(os.environ.get("L_MAIL_DB", str(_DEFAULT_DB)))
 # デフォルトのラボメン（呼び出し元プロファイルか環境変数で設定）
 DEFAULT_MEMBER = os.environ.get("HERMES_PROFILE", os.environ.get("L_MAIL_MEMBER", "unknown"))
 
-# 既知のラボメン一覧（ack_map の初期化に使う）
-ALL_MEMBERS = ["okabe", "dal", "kurisu", "mayuri"]
+# 既知のラボメン一覧（ack_map の初期化に使う）= HERMES_PROFILE 名と一致させる
+ALL_MEMBERS = ["okabe-rintaro", "itaru-hashida", "kurisu_makise", "mayuri-shiina"]
 
 
 # ──────────────────────────────────────────
