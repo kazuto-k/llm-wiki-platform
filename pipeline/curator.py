@@ -108,15 +108,35 @@ def parse_md(content: str) -> tuple[dict, str]:
     """
     Markdownファイルを frontmatter dict と body str に分離する。
     ruamel.yaml を使うことで既存の型・コメントを保持。
+    YAML パースエラーの場合は空 dict を返す（不正な frontmatter でもクラッシュしない）。
+    Wiki.js が injectPageMetadata で二重 frontmatter を生成する場合も解決する。
     """
     if not content.startswith("---"):
         return {}, content
     parts = content.split("---", 2)
     if len(parts) < 3:
         return {}, content
-    fm = _yaml.load(parts[1]) or {}
-    body = parts[2].lstrip("\n")
-    return fm, body
+    try:
+        fm = _yaml.load(parts[1]) or {}
+    except Exception:
+        fm = {}
+
+    body_raw = parts[2].lstrip("\n")
+
+    # Wiki.js が content ごと再ラップした二重 frontmatter 検出
+    # body の先頭が再び --- で始まる場合は、そちらを "本来の" frontmatter として優先
+    if body_raw.startswith("---"):
+        inner_parts = body_raw.split("---", 2)
+        if len(inner_parts) >= 3:
+            try:
+                inner_fm = _yaml.load(inner_parts[1]) or {}
+                if inner_fm:  # 有効な frontmatter なら上書き
+                    fm = inner_fm
+                    body_raw = inner_parts[2].lstrip("\n")
+            except Exception:
+                pass  # 内側も壊れてたら outer fm のまま
+
+    return fm, body_raw
 
 
 def render_md(fm: dict, body: str) -> str:
