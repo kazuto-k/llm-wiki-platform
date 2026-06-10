@@ -230,7 +230,7 @@ def cmd_list(args):
 
     # --mine フィルタ
     if args.mine:
-        me = DEFAULT_MEMBER
+        me = args.member if args.member else DEFAULT_MEMBER
         def _is_mine(r):
             if not r["assignees"]:
                 return False
@@ -458,6 +458,7 @@ def main():
     p_list.add_argument("--status", choices=["open", "assigned", "done"], help="ステータスで絞り込み")
     p_list.add_argument("--all", action="store_true", help="全ステータスを表示")
     p_list.add_argument("--mine", action="store_true", help="自分宛（assigneesに自分が含まれる）のみ表示")
+    p_list.add_argument("--member", default=None, help="確認者プロファイル名（省略時は $HERMES_PROFILE）。--mine と組み合わせて使う")
     p_list.add_argument("--limit", type=int, default=20, help="表示件数（デフォルト: 20）")
 
     # show
