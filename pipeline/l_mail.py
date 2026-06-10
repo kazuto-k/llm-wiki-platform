@@ -154,6 +154,24 @@ def cmd_add(args):
     assignees_json = json.dumps(members) if members else None
 
     conn = _connect()
+
+    # --upsert: 同ページの open 通知があれば summary/detail/updated_at を更新（assigned/done は触らない）
+    if getattr(args, "upsert", False):
+        existing = conn.execute(
+            "SELECT id FROM notifications WHERE page_path=? AND status='open' LIMIT 1",
+            (args.page,),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE notifications SET summary=?, detail=?, source=? WHERE id=?",
+                (args.summary, args.detail or "", args.source, existing["id"]),
+            )
+            conn.commit()
+            conn.close()
+            print(f"upserted: {_short(existing['id'])}  [{args.source}] {args.page}")
+            print(f"  {args.summary}")
+            return existing["id"]
+
     nid = str(uuid.uuid4())
     conn.execute(
         """INSERT INTO notifications
@@ -468,6 +486,8 @@ def main():
     p_add.add_argument("--detail", default="", help="詳細テキスト（省略可）")
     p_add.add_argument("--assignees", default=None,
                        help="宛先: all / noreply / dal,kurisu など（カンマ区切り）")
+    p_add.add_argument("--upsert", action="store_true",
+                       help="同ページの open 通知があれば上書き（assigned/done は保護）")
 
     # create
     p_create = sub.add_parser("create", help="手動通知を作成する（kanban的な依頼・連絡）")
