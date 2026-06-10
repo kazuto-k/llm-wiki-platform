@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # DB パス: llm-wiki-platform/data/l_mail.db（環境変数で上書き可）
-_DEFAULT_DB = Path(__file__).parent.parent / "data" / "l_mail.db"
+_DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "l_mail.db"
 DB_PATH = Path(os.environ.get("L_MAIL_DB", str(_DEFAULT_DB)))
 
 # デフォルトのラボメン（呼び出し元プロファイルか環境変数で設定）
