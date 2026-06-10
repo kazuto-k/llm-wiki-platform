@@ -240,11 +240,38 @@ def call_llm(body: str, curation_profile: str) -> dict | None:
         end   = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
         raw   = "\n".join(lines[start:end]).strip()
 
-    # JSON パース
+    # JSON パース（多段フォールバック）
+    result = None
+
+    # 1) 通常パース
     try:
         result = json.loads(raw)
-    except json.JSONDecodeError as e:
-        print(f"[ERROR] LLM output is not valid JSON: {e}\n{raw[:300]}")
+    except json.JSONDecodeError:
+        pass
+
+    # 2) strict=False（制御文字を許容）
+    if result is None:
+        try:
+            result = json.loads(raw, strict=False)
+        except json.JSONDecodeError:
+            pass
+
+    # 3) curated_body を正規表現で直接抽出（不正エスケープ対策）
+    if result is None:
+        import re
+        m = re.search(r'"curated_body"\s*:\s*"(.*?)"(?=\s*,\s*"system_|}\s*$)', raw, re.DOTALL)
+        if m:
+            try:
+                # エスケープを修正して再パース
+                cleaned = raw.replace('\\\n', '\\n')
+                result = json.loads(cleaned, strict=False)
+            except json.JSONDecodeError:
+                # 正規表現で取れた curated_body だけ使う
+                result = {"curated_body": m.group(1).replace('\\n', '\n'),
+                          "system_tags": [], "system_summary": ""}
+
+    if result is None:
+        print(f"[ERROR] LLM output is not valid JSON: {raw[:300]}")
         return None
 
     # 必須キーの確認
