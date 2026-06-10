@@ -210,6 +210,19 @@ def cmd_create(args):
     return nid
 
 
+def _row_to_dict(r) -> dict:
+    """sqlite3.Row を JSON シリアライズ可能な dict に変換する。"""
+    d = dict(r)
+    # JSON 文字列フィールドをパース
+    for key in ("assignees", "ack_map"):
+        if d.get(key):
+            try:
+                d[key] = json.loads(d[key])
+            except Exception:
+                pass
+    return d
+
+
 def cmd_list(args):
     """通知一覧を表示する。"""
     conn = _connect()
@@ -239,7 +252,14 @@ def cmd_list(args):
         rows = [r for r in rows if _is_mine(r)]
 
     if not rows:
-        print("(通知なし)")
+        if getattr(args, "json", False):
+            print("[]")
+        else:
+            print("(通知なし)")
+        return
+
+    if getattr(args, "json", False):
+        print(json.dumps([_row_to_dict(r) for r in rows], ensure_ascii=False, indent=2))
         return
 
     for r in rows:
@@ -276,6 +296,10 @@ def cmd_show(args):
     if not row:
         print(f"not found: {args.id}", file=sys.stderr)
         sys.exit(1)
+
+    if getattr(args, "json", False):
+        print(json.dumps(_row_to_dict(row), ensure_ascii=False, indent=2))
+        return
 
     print(f"id       : {row['id']}")
     print(f"status   : {row['status']}")
@@ -460,10 +484,12 @@ def main():
     p_list.add_argument("--mine", action="store_true", help="自分宛（assigneesに自分が含まれる）のみ表示")
     p_list.add_argument("--member", default=None, help="確認者プロファイル名（省略時は $HERMES_PROFILE）。--mine と組み合わせて使う")
     p_list.add_argument("--limit", type=int, default=20, help="表示件数（デフォルト: 20）")
+    p_list.add_argument("--json", action="store_true", help="JSON 形式で出力")
 
     # show
     p_show = sub.add_parser("show", help="1件の詳細を表示")
     p_show.add_argument("id", help="通知ID（先頭8文字でも可）")
+    p_show.add_argument("--json", action="store_true", help="JSON 形式で出力")
 
     # assign
     p_assign = sub.add_parser("assign", help="自分にアサイン")
