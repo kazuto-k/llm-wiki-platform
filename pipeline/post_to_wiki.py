@@ -157,14 +157,14 @@ def main():
         print(f"ID        : {args.id or '(新規作成)'}")
         print(f"タグ      : {tags}")
         print(f"説明      : {description}")
-        print(f"本文 ({len(content)} 文字):")
-        print(content[:300] + ("..." if len(content) > 300 else ""))
+        print(f"本文 ({len(body)} 文字):")
+        print(body[:300] + ("..." if len(body) > 300 else ""))
         return
 
     # 更新モード
     if args.id:
         from wikijs_api import WIKIJS_URL
-        update_page(jwt, args.id, content, title=title,
+        update_page(jwt, args.id, body, title=title,
                     description=description, tags=tags, locale=args.locale)
         print(f"✅ 更新完了: ID={args.id}  タイトル={title}")
         print(f"   {WIKIJS_URL}/ja/...")
@@ -177,7 +177,7 @@ def main():
 
     from wikijs_api import WIKIJS_URL
     page = create_page_with_parents(
-        jwt, args.path, title, content,
+        jwt, args.path, title, body,
         description=description, tags=tags, locale=args.locale,
     )
     print(f"✅ 作成完了: {title}")
