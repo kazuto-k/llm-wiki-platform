@@ -253,7 +253,7 @@ def main():
                 new_comment_count += 1
                 summary = f"新コメント: {p['title']} by {c['authorName']}"
                 detail  = (f"{WIKI_BASE_URL}/{p['path']}\n"
-                           f"{c['content'][:200]}")
+                           f"{c['content']}")
                 print(f"[wiki-watcher] {summary}")
                 l_mail_add(p["path"], summary, source="wiki_watcher_comment",
                                detail=detail, dry_run=args.dry_run)
