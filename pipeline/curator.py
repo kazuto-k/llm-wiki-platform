@@ -421,14 +421,9 @@ def main():
             print(f"[ERROR] Failed to curate {f_info['path']}: {e}")
 
     if curated > 0:
-        run("git add -A", cwd=repo_path)
-        run(
-            f'git commit -m "[curator] curate {curated} file(s) (schema v2.0: body preserved, curated_body added)" '
-            f'--author="{CURATOR_NAME} <{CURATOR_EMAIL}>"',
-            cwd=repo_path,
-        )
-        run("git push origin HEAD", cwd=repo_path)
-        print(f"[curator] Committed and pushed {curated} file(s)")
+        # curator の結果は DB の extra.curated_body にのみ書く。
+        # Git への commit/push は行わない（Wiki.js との rebase コンフリクト防止）
+        print(f"[curator] Curated {curated} file(s) — written to DB only, Git push skipped")
     else:
         print("[curator] No files were curated successfully.")
         sys.exit(1)
