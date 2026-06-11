@@ -372,6 +372,7 @@ def main():
     parser = argparse.ArgumentParser(description="llm-wiki curator (schema.yaml v2.0)")
     parser.add_argument("repo",     help="作業リポジトリのパス")
     parser.add_argument("--branch", help="ブランチ名（コミットメッセージ用）")
+    parser.add_argument("--files",  nargs="*", help="処理対象ファイルを限定（repo内相対パス、例: ja/path/to/page.md）")
     args = parser.parse_args()
 
     repo_path = args.repo
@@ -382,6 +383,14 @@ def main():
         print("[curator] No raw files found. Nothing to curate.")
         return
 
+    # --files 指定があれば対象を絞る
+    if args.files:
+        target_set = set(args.files)
+        raw_files = [f for f in raw_files if f["path"] in target_set]
+        if not raw_files:
+            print("[curator] No matching raw files in --files list. Nothing to curate.")
+            return
+
     print(f"[curator] Found {len(raw_files)} raw file(s):")
     for f in raw_files:
         profile    = f["frontmatter"].get("curation_profile", "auto")
@@ -389,34 +398,46 @@ def main():
         print(f"  - {f['wiki_page_path']} ({locale_tag}profile={profile})")
 
     curated = 0
+    jwt = None  # lazy init
     for f_info in raw_files:
         try:
+            # LLM 呼び出し前に DB チェック（frontmatter なし = UI投稿の場合）
+            if not f_info["frontmatter"].get("status"):
+                try:
+                    if jwt is None:
+                        jwt = _wikijs.login_wiki(
+                            os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal"),
+                            os.environ.get("WIKIJS_PASSWORD", "admin123"),
+                        )
+                    page_id = _wikijs.resolve_page_id(jwt, f_info["wiki_page_path"])
+                    if page_id:
+                        existing = _wikijs.get_page(jwt, page_id)
+                        existing_extra = existing.get("extra") or ""
+                        if existing_extra and "curated_body" in existing_extra:
+                            import json as _json
+                            try:
+                                ex = _json.loads(existing_extra)
+                                if ex.get("curated_body"):
+                                    print(f"[curator] SKIP: curated_body already exists: {f_info['wiki_page_path']}")
+                                    continue
+                            except Exception:
+                                pass
+                except Exception as e:
+                    print(f"[curator] WARN: DB pre-check failed ({e}), proceeding anyway")
+
             curated_body = curate_file(f_info)
             if curated_body is not None:
                 curated += 1
                 print(f"[curator] Done: {f_info['path']}")
                 # DB の page.extra.curated_body を更新
                 try:
-                    jwt = _wikijs.login_wiki(
-                        os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal"),
-                        os.environ.get("WIKIJS_PASSWORD", "admin123"),
-                    )
+                    if jwt is None:
+                        jwt = _wikijs.login_wiki(
+                            os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal"),
+                            os.environ.get("WIKIJS_PASSWORD", "admin123"),
+                        )
                     page_id = _wikijs.resolve_page_id(jwt, f_info["wiki_page_path"])
                     if page_id:
-                        # frontmatter なし（UI投稿）で既に curated_body がある場合はスキップ
-                        if not f_info["frontmatter"].get("status"):
-                            existing = _wikijs.get_page(jwt, page_id)
-                            existing_extra = existing.get("extra") or ""
-                            if existing_extra and "curated_body" in existing_extra:
-                                import json as _json
-                                try:
-                                    ex = _json.loads(existing_extra)
-                                    if ex.get("curated_body"):
-                                        print(f"[curator] SKIP: curated_body already exists: {f_info['wiki_page_path']}")
-                                        curated -= 1
-                                        continue
-                                except Exception:
-                                    pass
                         _wikijs.update_extra(jwt, page_id, curated_body)
                         print(f"[curator] extra.curated_body updated: page_id={page_id}")
                     else:
