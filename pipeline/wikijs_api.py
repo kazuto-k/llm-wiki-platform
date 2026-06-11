@@ -391,6 +391,35 @@ def list_all_recent_comments(jwt, locale=None):
     return data["comments"]["list"]
 
 
+def post_comment(jwt, page_id, content):
+    """
+    指定ページIDにコメントを投稿する。
+    ログインユーザーとして投稿されるため、JWTのアカウント名が表示される。
+
+    Args:
+        jwt: ログイン済みJWT
+        page_id: 投稿先ページのID（整数）
+        content: コメント本文（テキスト）
+    """
+    result = _graphql(
+        """
+        mutation($pageId: Int!, $content: String!) {
+          comments {
+            create(pageId: $pageId, content: $content, guestName: "", guestEmail: "") {
+              responseResult { succeeded errorCode message }
+            }
+          }
+        }
+        """,
+        variables={"pageId": page_id, "content": content},
+        token=jwt,
+    )
+    res = result["comments"]["create"]["responseResult"]
+    if not res["succeeded"]:
+        raise RuntimeError(f"コメント投稿失敗: {res['message']}")
+    return res
+
+
 # ──────────────────────────────────────────
 # 動作確認用
 # ──────────────────────────────────────────

@@ -32,7 +32,7 @@ from pathlib import Path
 
 # wikijs_api は自分で .env をロードする
 sys.path.insert(0, str(Path(__file__).parent))
-from wikijs_api import login_wiki, create_page_with_parents, update_page, list_pages, page_exists, read_page, list_comments
+from wikijs_api import login_wiki, create_page_with_parents, update_page, list_pages, page_exists, read_page, list_comments, post_comment
 
 
 # ──────────────────────────────────────────
@@ -110,6 +110,10 @@ def main():
                         help="指定パスのページ内容を表示して終了（例: --get cognitive-ark/system/foo）")
     parser.add_argument("--comments", "-c",
                         help="指定パスのページのコメント一覧を表示して終了（例: --comments cognitive-ark/lab/mayuri-diary/2026-06-11-evening）")
+    parser.add_argument("--comment-post",
+                        help="指定パスのページにコメントを投稿して終了（例: --comment-post cognitive-ark/lab/... --message 'コメント内容'）")
+    parser.add_argument("--message", "-m",
+                        help="--comment-post と組み合わせて使う投稿内容")
     parser.add_argument("--dry-run", action="store_true",
                         help="実際には投稿せず、投稿内容を表示するだけ")
     args = parser.parse_args()
@@ -144,6 +148,25 @@ def main():
             print(f"[{c['createdAt']}] {c['authorName']}")
             print(c['content'])
             print()
+        raise SystemExit(0)
+
+    # --comment-post モード
+    if args.comment_post:
+        if not args.message:
+            print("❌ --comment-post には --message が必要だお")
+            raise SystemExit(1)
+        # パスからページIDを解決
+        pages = list_pages(jwt)
+        page_id = None
+        for p in pages:
+            if p["path"] == args.comment_post:
+                page_id = p["id"]
+                break
+        if page_id is None:
+            print(f"❌ ページが見つかりません: {args.comment_post}")
+            raise SystemExit(1)
+        post_comment(jwt, page_id, args.message)
+        print(f"✅ コメント投稿完了: {args.comment_post}")
         raise SystemExit(0)
 
     # --list モード
