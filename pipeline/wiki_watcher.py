@@ -59,9 +59,10 @@ STATE_FILE = Path(os.environ.get(
     Path.home() / ".hermes/profiles/itaru-hashida/scripts/wiki_watcher_state.json",
 ))
 
-# l_mail.py のパス（このスクリプトと同ディレクトリ）
+# l_mail.py / wiki_notify.py のパス（このスクリプトと同ディレクトリ）
 _SCRIPT_DIR  = Path(__file__).parent
-L_MAIL   = str(_SCRIPT_DIR / "l_mail.py")
+L_MAIL       = str(_SCRIPT_DIR / "l_mail.py")
+WIKI_NOTIFY  = str(_SCRIPT_DIR / "wiki_notify.py")
 L_MAIL_DB = os.environ.get(
     "L_MAIL_DB",
     str(Path("/home/kazuto/workspace/llm-wiki-platform/data/l_mail.db")),
@@ -81,14 +82,19 @@ def wikijs_graphql(query: str, variables: dict = None, token: str = None) -> dic
 
 
 def wikijs_login() -> str:
+    email    = os.environ.get("WIKIJS_ADMIN_EMAIL", "admin@llm-wiki.internal")
+    password = os.environ.get("WIKIJS_ADMIN_PASSWORD", "")
     data = wikijs_graphql("""
         mutation($email: String!, $password: String!) {
           authentication { login(username: $email, password: $password, strategy: "local") {
             jwt
           }}
         }
-    """, {"email": "admin@llm-wiki.internal", "password": "admin123"})
-    return data["data"]["authentication"]["login"]["jwt"]
+    """, {"email": email, "password": password})
+    jwt = data["data"]["authentication"]["login"]["jwt"]
+    if not jwt:
+        raise RuntimeError(f"jwt=Null: {email} でのログイン失敗。WIKIJS_ADMIN_PASSWORD を確認してください")
+    return jwt
 
 
 def get_recent_pages(limit: int = 30) -> list:
@@ -138,6 +144,29 @@ def l_mail_add(page_path: str, summary: str, source: str = "wiki_watcher",
             print(result.stdout.strip())
     except Exception as e:
         print(f"[ERROR] l-mail add 例外: {e}", file=sys.stderr)
+
+
+def wiki_notify_send(page_id: int, title: str, path: str, author: str, action: str,
+                     dry_run: bool = False):
+    """wiki_notify.py を呼んで各ラボメンにMatrix DM通知を送る。"""
+    cmd = [
+        sys.executable, WIKI_NOTIFY,
+        "--page-id", str(page_id),
+        "--title",   title,
+        "--path",    path,
+        "--author",  author,
+        "--action",  action,
+    ]
+    if dry_run:
+        cmd.append("--dry-run")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.stdout:
+            print(result.stdout.strip())
+        if result.returncode != 0:
+            print(f"[ERROR] wiki_notify 失敗: {result.stderr}", file=sys.stderr)
+    except Exception as e:
+        print(f"[ERROR] wiki_notify 例外: {e}", file=sys.stderr)
 
 
 # ── 状態管理 ────────────────────────────────────────────
@@ -219,12 +248,22 @@ def main():
 
             if is_new or is_updated:
                 new_page_count += 1
-                summary = f"ページ{'作成' if is_new else '更新'}: {p['title']} ({fmt_time(p['updatedAt'])})"
-                detail  = f"{WIKI_BASE_URL}/{p['path']}"
+                action    = "created" if is_new else "updated"
+                summary   = f"ページ{'作成' if is_new else '更新'}: {p['title']} ({fmt_time(p['updatedAt'])})"
+                detail    = f"{WIKI_BASE_URL}/{p['path']}"
+                author    = p.get("authorName", p.get("creatorName", ""))
                 print(f"[wiki-watcher] {summary}")
                 l_mail_add(p["path"], summary, source="wiki_watcher",
                            detail=detail, dry_run=args.dry_run,
                            upsert=(rule == "upsert" and is_updated))
+                wiki_notify_send(
+                    page_id=int(p["id"]),
+                    title=p["title"],
+                    path=p["path"],
+                    author=author,
+                    action=action,
+                    dry_run=args.dry_run,
+                )
             seen_page_ids[pid] = p["updatedAt"]
 
     # ── コメント監視 ──
