@@ -361,7 +361,7 @@ def list_comments(jwt, path, locale=None):
         query($locale: String!, $path: String!) {
           comments {
             list(locale: $locale, path: $path) {
-              id content createdAt updatedAt authorName authorEmail
+              id content createdAt updatedAt authorName
             }
           }
         }

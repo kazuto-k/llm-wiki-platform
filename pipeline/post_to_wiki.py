@@ -32,7 +32,7 @@ from pathlib import Path
 
 # wikijs_api は自分で .env をロードする
 sys.path.insert(0, str(Path(__file__).parent))
-from wikijs_api import login_wiki, create_page_with_parents, update_page, list_pages, page_exists, read_page
+from wikijs_api import login_wiki, create_page_with_parents, update_page, list_pages, page_exists, read_page, list_comments
 
 
 # ──────────────────────────────────────────
@@ -108,6 +108,8 @@ def main():
                         help="ページ一覧を表示して終了")
     parser.add_argument("--get", "-g",
                         help="指定パスのページ内容を表示して終了（例: --get cognitive-ark/system/foo）")
+    parser.add_argument("--comments", "-c",
+                        help="指定パスのページのコメント一覧を表示して終了（例: --comments cognitive-ark/lab/mayuri-diary/2026-06-11-evening）")
     parser.add_argument("--dry-run", action="store_true",
                         help="実際には投稿せず、投稿内容を表示するだけ")
     args = parser.parse_args()
@@ -128,6 +130,20 @@ def main():
         print(f"# 更新: {page['updatedAt']}")
         print("---")
         print(page["content"])
+        raise SystemExit(0)
+
+    # --comments モード
+    if args.comments:
+        comments = list_comments(jwt, args.comments)
+        if not comments:
+            print(f"コメントなし: {args.comments}")
+            raise SystemExit(0)
+        print(f"# コメント一覧: {args.comments}  ({len(comments)}件)")
+        print("---")
+        for c in comments:
+            print(f"[{c['createdAt']}] {c['authorName']}")
+            print(c['content'])
+            print()
         raise SystemExit(0)
 
     # --list モード
