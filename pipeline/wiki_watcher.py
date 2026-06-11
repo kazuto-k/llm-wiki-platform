@@ -108,6 +108,17 @@ def get_recent_pages(limit: int = 30) -> list:
     return pages
 
 
+def get_page_author(jwt: str, page_id: int) -> str:
+    """pages.single で著者名を取得（要JWT認証）"""
+    data = wikijs_graphql("""
+        query($id: Int!) { pages { single(id: $id) { authorName creatorName } } }
+    """, {"id": page_id}, token=jwt)
+    page = data["data"]["pages"]["single"]
+    if page:
+        return page.get("authorName") or page.get("creatorName") or ""
+    return ""
+
+
 def get_comments(jwt: str, path: str) -> list:
     data = wikijs_graphql("""
         query($path: String!) { comments { list(locale: "ja", path: $path) {
@@ -223,6 +234,13 @@ def main():
     seen_page_ids    = state.get("seen_page_ids", {})
     seen_comment_ids = set(state.get("seen_comment_ids", []))
 
+    # ── JWT 取得（ページ監視・コメント監視で共用）──
+    jwt = None
+    try:
+        jwt = wikijs_login()
+    except Exception as e:
+        print(f"[WARN] Wiki.js ログイン失敗: {e}。コメント監視・著者取得不可", file=sys.stderr)
+
     # ── ページ更新監視 ──
     try:
         pages = get_recent_pages(limit=30)
@@ -251,7 +269,12 @@ def main():
                 action    = "created" if is_new else "updated"
                 summary   = f"ページ{'作成' if is_new else '更新'}: {p['title']} ({fmt_time(p['updatedAt'])})"
                 detail    = f"{WIKI_BASE_URL}/{p['path']}"
-                author    = p.get("authorName", p.get("creatorName", ""))
+                author = ""
+                if jwt:
+                    try:
+                        author = get_page_author(jwt, int(p["id"]))
+                    except Exception:
+                        pass
                 print(f"[wiki-watcher] {summary}")
                 l_mail_add(p["path"], summary, source="wiki_watcher",
                            detail=detail, dry_run=args.dry_run,
@@ -267,10 +290,7 @@ def main():
             seen_page_ids[pid] = p["updatedAt"]
 
     # ── コメント監視 ──
-    try:
-        jwt = wikijs_login()
-    except Exception as e:
-        print(f"[ERROR] Wiki.js ログイン失敗: {e}", file=sys.stderr)
+    if jwt is None:
         state["seen_page_ids"]    = seen_page_ids
         state["seen_comment_ids"] = list(seen_comment_ids)
         state["last_check"]       = datetime.datetime.now(datetime.timezone.utc).isoformat()
