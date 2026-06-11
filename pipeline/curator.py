@@ -403,6 +403,20 @@ def main():
                     )
                     page_id = _wikijs.resolve_page_id(jwt, f_info["wiki_page_path"])
                     if page_id:
+                        # frontmatter なし（UI投稿）で既に curated_body がある場合はスキップ
+                        if not f_info["frontmatter"].get("status"):
+                            existing = _wikijs.get_page(jwt, page_id)
+                            existing_extra = existing.get("extra") or ""
+                            if existing_extra and "curated_body" in existing_extra:
+                                import json as _json
+                                try:
+                                    ex = _json.loads(existing_extra)
+                                    if ex.get("curated_body"):
+                                        print(f"[curator] SKIP: curated_body already exists: {f_info['wiki_page_path']}")
+                                        curated -= 1
+                                        continue
+                                except Exception:
+                                    pass
                         _wikijs.update_extra(jwt, page_id, curated_body)
                         print(f"[curator] extra.curated_body updated: page_id={page_id}")
                     else:
