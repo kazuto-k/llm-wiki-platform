@@ -32,7 +32,7 @@ from pathlib import Path
 
 # wikijs_api は自分で .env をロードする
 sys.path.insert(0, str(Path(__file__).parent))
-from wikijs_api import login_wiki, create_page_with_parents, update_page, list_pages, page_exists
+from wikijs_api import login_wiki, create_page_with_parents, update_page, list_pages, page_exists, read_page
 
 
 # ──────────────────────────────────────────
@@ -106,6 +106,8 @@ def main():
                         help="ロケール（デフォルト: ja）")
     parser.add_argument("--list", "-l", action="store_true",
                         help="ページ一覧を表示して終了")
+    parser.add_argument("--get", "-g",
+                        help="指定パスのページ内容を表示して終了（例: --get cognitive-ark/system/foo）")
     parser.add_argument("--dry-run", action="store_true",
                         help="実際には投稿せず、投稿内容を表示するだけ")
     args = parser.parse_args()
@@ -114,6 +116,19 @@ def main():
     email = os.environ.get("WIKIJS_EMAIL", "admin@llm-wiki.internal")
     password = os.environ.get("WIKIJS_PASSWORD", "admin123")
     jwt = login_wiki(email, password)
+
+    # --get モード
+    if args.get:
+        page = read_page(jwt, args.get)
+        if page is None:
+            print(f"❌ ページが見つかりません: {args.get}")
+            raise SystemExit(1)
+        print(f"# {page['title']}")
+        print(f"# パス: {page['path']}  ID: {page['id']}")
+        print(f"# 更新: {page['updatedAt']}")
+        print("---")
+        print(page["content"])
+        raise SystemExit(0)
 
     # --list モード
     if args.list:

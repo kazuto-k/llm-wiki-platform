@@ -146,6 +146,41 @@ def page_exists(jwt, path, locale=None):
     return False
 
 
+def read_page(jwt, path, locale=None):
+    """
+    パスを指定してページの内容を取得する。
+    返り値: dict（id, title, path, content, description, tags, updatedAt, createdAt）
+    ページが見つからない場合は None を返す。
+    """
+    locale = locale or DEFAULT_LOCALE
+    # まず list_pages でIDを引く
+    pages = list_pages(jwt)
+    page_id = None
+    for p in pages:
+        if p["path"] == path:
+            page_id = p["id"]
+            break
+    if page_id is None:
+        return None
+    # IDでフル内容を取得
+    result = _graphql(
+        """
+        query($id: Int!) {
+          pages {
+            single(id: $id) {
+              id title path content description
+              tags { tag }
+              updatedAt createdAt
+            }
+          }
+        }
+        """,
+        variables={"id": page_id},
+        token=jwt,
+    )
+    return result["pages"]["single"]
+
+
 # ──────────────────────────────────────────
 # ページ作成・更新
 # ──────────────────────────────────────────
