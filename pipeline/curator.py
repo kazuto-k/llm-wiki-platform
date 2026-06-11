@@ -299,30 +299,35 @@ def find_raw_files(repo_path: str) -> list[dict]:
             with open(fpath) as fh:
                 content = fh.read()
             fm, body = parse_md(content)
-            if fm.get("status") == "raw":
-                # repo からの相対パス（例: ja/cognitive-ark/foo.md）
-                rel_path = os.path.relpath(fpath, repo_path)
-                # locale プレフィックスを除いた wiki ページパス（例: cognitive-ark/foo）
-                # 先頭の xx/ が 2文字の locale コードなら strip する
-                parts = rel_path.replace("\\", "/").split("/")
-                if len(parts) > 1 and len(parts[0]) == 2:
-                    wiki_path = "/".join(parts[1:])
-                    locale    = parts[0]
-                else:
-                    wiki_path = rel_path
-                    locale    = None
-                # .md 拡張子を除去
-                wiki_page_path = wiki_path[:-3] if wiki_path.endswith(".md") else wiki_path
+            # status: raw か、frontmatter なし（UI投稿）を処理対象とする
+            status = fm.get("status")
+            if status not in ("raw", None, ""):
+                continue
+            if not fm and not body.strip():
+                continue  # 空ファイルはスキップ
+            # repo からの相対パス（例: ja/cognitive-ark/foo.md）
+            rel_path = os.path.relpath(fpath, repo_path)
+            # locale プレフィックスを除いた wiki ページパス（例: cognitive-ark/foo）
+            # 先頭の xx/ が 2文字の locale コードなら strip する
+            parts = rel_path.replace("\\", "/").split("/")
+            if len(parts) > 1 and len(parts[0]) == 2:
+                wiki_path = "/".join(parts[1:])
+                locale    = parts[0]
+            else:
+                wiki_path = rel_path
+                locale    = None
+            # .md 拡張子を除去
+            wiki_page_path = wiki_path[:-3] if wiki_path.endswith(".md") else wiki_path
 
-                raw_files.append({
-                    "path":           rel_path,       # repo 内の相対パス（locale付き）
-                    "wiki_page_path": wiki_page_path, # locale なし wiki パス（横断処理用）
-                    "locale":         locale,
-                    "full_path":      fpath,
-                    "frontmatter":    fm,
-                    "body":           body,
-                    "content":        content,
-                })
+            raw_files.append({
+                "path":           rel_path,       # repo 内の相対パス（locale付き）
+                "wiki_page_path": wiki_page_path, # locale なし wiki パス（横断処理用）
+                "locale":         locale,
+                "full_path":      fpath,
+                "frontmatter":    fm,
+                "body":           body,
+                "content":        content,
+            })
     return raw_files
 
 
