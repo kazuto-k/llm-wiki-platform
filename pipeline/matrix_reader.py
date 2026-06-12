@@ -90,12 +90,8 @@ def read_room_history(room_id: str = None, limit: int = 200,
 
     params = {
         "dir": direction,
-        "limit": str(min(limit, 500)),  # Matrix API の上限
+        "limit": str(min(limit, 500)),
     }
-    if since_ts:
-        # Matrix の /messages は from パラメータを使う
-        # タイムスタンプ→イベントIDの変換は必要に応じて
-        params["from"] = since_ts  # 簡易版：ISOタイムスタンプ
 
     qs = "&".join(f"{k}={urllib.parse.quote(v)}" for k, v in params.items())
     path = f"/_matrix/client/v3/rooms/{room_id}/messages?{qs}"
